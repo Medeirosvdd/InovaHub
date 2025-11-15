@@ -3,6 +3,22 @@ session_start();
 require 'includes/conexao.php';
 require 'includes/funcoes.php';
 
+// FUNÇÃO DE FALLBACK PARA IMAGENS
+function getImagemNoticia($nome_imagem)
+{
+    if (empty($nome_imagem)) {
+        return "assets/img/defaults/noticia.jpg";
+    }
+
+    $caminho_local = "uploads/noticias/" . $nome_imagem;
+
+    if (file_exists($caminho_local)) {
+        return $caminho_local;
+    } else {
+        return "assets/img/defaults/noticia.jpg";
+    }
+}
+
 // Buscar notícia pelo slug
 $slug = $_GET['slug'] ?? '';
 
@@ -67,7 +83,7 @@ $usuario = usuarioLogado($pdo);
     <meta name="description" content="<?= htmlspecialchars($noticia['resumo']) ?>">
     <meta property="og:title" content="<?= htmlspecialchars($noticia['titulo']) ?>">
     <meta property="og:description" content="<?= htmlspecialchars($noticia['resumo']) ?>">
-    <meta property="og:image" content="uploads/noticias/<?= $noticia['imagem'] ?>">
+    <meta property="og:image" content="<?= getImagemNoticia($noticia['imagem']) ?>">
     <meta property="og:type" content="article">
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
@@ -292,7 +308,7 @@ $usuario = usuarioLogado($pdo);
         <div class="container">
             <div class="layout-principal">
                 <div class="conteudo-principal">
-                    <img src="uploads/noticias/<?= $noticia['imagem'] ?>" alt="<?= htmlspecialchars($noticia['titulo']) ?>" class="noticia-imagem-destaque">
+                    <img src="<?= getImagemNoticia($noticia['imagem']) ?>" alt="<?= htmlspecialchars($noticia['titulo']) ?>" class="noticia-imagem-destaque">
 
                     <div class="noticia-conteudo">
                         <?= nl2br(htmlspecialchars($noticia['noticia'])) ?>

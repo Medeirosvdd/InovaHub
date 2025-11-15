@@ -5,7 +5,10 @@ require 'includes/funcoes.php';
 
 $usuario = usuarioLogado($pdo);
 
-// Buscar manchete principal (destaque ou última notícia)
+// Buscar categorias primeiro (para evitar erro)
+$categorias = $pdo->query("SELECT id, nome, slug, cor FROM categorias ORDER BY nome")->fetchAll();
+
+// Buscar manchete principal
 $manchete = $pdo->query("
     SELECT n.*, u.nome AS autor_nome, c.nome AS categoria_nome, c.cor AS categoria_cor
     FROM noticias n
@@ -17,20 +20,23 @@ $manchete = $pdo->query("
 ")->fetch(PDO::FETCH_ASSOC);
 
 // Buscar destaques (3 notícias mais recentes após a manchete)
-$destaques = $pdo->query("
-    SELECT n.*, u.nome AS autor_nome, c.nome AS categoria_nome
-    FROM noticias n
-    JOIN usuarios u ON u.id = n.autor
-    JOIN categorias c ON c.id = n.categoria
-    WHERE n.status = 'publicada' AND n.id != " . $manchete['id'] . "
-    ORDER BY n.data DESC 
-    LIMIT 3
-")->fetchAll(PDO::FETCH_ASSOC);
+$destaques = [];
+if ($manchete) {
+    $stmt = $pdo->prepare("
+        SELECT n.*, u.nome AS autor_nome, c.nome AS categoria_nome
+        FROM noticias n
+        JOIN usuarios u ON u.id = n.autor
+        JOIN categorias c ON c.id = n.categoria
+        WHERE n.status = 'publicada' AND n.id != ?
+        ORDER BY n.data DESC 
+        LIMIT 3
+    ");
+    $stmt->execute([$manchete['id']]);
+    $destaques = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // Buscar notícias por categoria (para sidebar)
 $noticias_por_categoria = [];
-$categorias = $pdo->query("SELECT id, nome, slug FROM categorias ORDER BY nome")->fetchAll();
-
 foreach ($categorias as $cat) {
     $stmt = $pdo->prepare("
         SELECT n.*, u.nome AS autor_nome 
@@ -41,13 +47,16 @@ foreach ($categorias as $cat) {
         LIMIT 3
     ");
     $stmt->execute([$cat['id']]);
-    $noticias_por_categoria[$cat['nome']] = $stmt->fetchAll();
+    $noticias = $stmt->fetchAll();
+    if (!empty($noticias)) {
+        $noticias_por_categoria[$cat['nome']] = $noticias;
+    }
 }
 
 // Notícias mais lidas da semana
 $mais_lidas = $pdo->query("
     SELECT n.*, u.nome AS autor_nome, c.nome AS categoria_nome,
-           SUM(e.visualizacoes) as total_visualizacoes
+           COALESCE(SUM(e.visualizacoes), 0) as total_visualizacoes
     FROM noticias n
     JOIN usuarios u ON u.id = n.autor
     JOIN categorias c ON c.id = n.categoria
@@ -67,6 +76,710 @@ $mais_lidas = $pdo->query("
     <title>InovaHub - Tecnologia e Inovação</title>
     <meta name="description" content="Portal de notícias sobre tecnologia, inovação, startups e inteligência artificial. Fique por dentro das últimas novidades do mundo tech.">
     <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        /* Reset e estilos base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        /* Cabeçalho estilo G1 */
+        .topo {
+            background-color: #c4170c;
+            color: white;
+            padding: 10px 0;
+            border-bottom: 3px solid #a6140b;
+        }
+
+        .topo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: -1px;
+        }
+
+        .logo a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .nav-principal {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-principal a {
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+
+        .nav-principal a:hover,
+        .nav-principal a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .user-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-menu {
+            position: relative;
+        }
+
+        .user-greeting {
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+
+        .user-greeting:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .user-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .user-menu:hover .user-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 12px 16px;
+            color: #333;
+            text-decoration: none;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-login,
+        .btn-register {
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-login {
+            color: white;
+            border: 1px solid white;
+        }
+
+        .btn-register {
+            background-color: white;
+            color: #c4170c;
+        }
+
+        .btn-login:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-register:hover {
+            background-color: #f0f0f0;
+        }
+
+        .btn-theme {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-theme:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Barra de busca */
+        .busca-section {
+            background-color: white;
+            padding: 15px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+
+        .busca-form {
+            display: flex;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .busca-form input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-right: none;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .busca-form input:focus {
+            outline: none;
+            border-color: #c4170c;
+        }
+
+        .btn-busca {
+            background-color: #c4170c;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .btn-busca:hover {
+            background-color: #a6140b;
+        }
+
+        /* Manchete principal */
+        .manchete-principal {
+            margin: 40px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .manchete-link {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .manchete-imagem {
+            position: relative;
+            height: 400px;
+        }
+
+        .manchete-imagem img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .categoria-badge {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #c4170c;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .manchete-conteudo {
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .manchete-titulo {
+            font-size: 36px;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .manchete-resumo {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .manchete-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* Destaques secundários */
+        .destaques-secundarios {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .destaque-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .destaque-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .destaque-imagem {
+            height: 200px;
+        }
+
+        .destaque-imagem img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .destaque-conteudo {
+            padding: 20px;
+        }
+
+        .destaque-conteudo h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .destaque-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* Layout principal */
+        .layout-principal {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        /* Conteúdo principal */
+        .categoria-section {
+            margin-bottom: 40px;
+        }
+
+        .titulo-categoria {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #c4170c;
+            font-size: 24px;
+        }
+
+        .ver-tudo {
+            font-size: 14px;
+            color: #c4170c;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .ver-tudo:hover {
+            text-decoration: underline;
+        }
+
+        .grid-noticias {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+        }
+
+        .noticia-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .noticia-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .noticia-imagem {
+            height: 180px;
+        }
+
+        .noticia-imagem img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .noticia-conteudo {
+            padding: 20px;
+        }
+
+        .noticia-conteudo h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .noticia-resumo {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .noticia-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Sidebar */
+        .sidebar-widget {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-widget h3 {
+            margin-bottom: 20px;
+            color: #c4170c;
+            font-size: 18px;
+        }
+
+        .mais-lidas-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .mais-lida-item {
+            display: flex;
+            gap: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .mais-lida-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .ranking {
+            background: #c4170c;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .mais-lida-item .conteudo h4 {
+            font-size: 14px;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .mais-lida-item .meta {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            gap: 10px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .newsletter-form input {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .newsletter-form button {
+            background: #c4170c;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .social-link {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background: #f5f5f5;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .social-link:hover {
+            background: #e0e0e0;
+        }
+
+        /* Footer */
+        .footer {
+            background: #333;
+            color: white;
+            padding: 40px 0 20px;
+            margin-top: 40px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-section h3,
+        .footer-section h4 {
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .footer-section ul {
+            list-style: none;
+        }
+
+        .footer-section li {
+            margin-bottom: 10px;
+        }
+
+        .footer-section a {
+            color: #ccc;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-section a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #444;
+            padding-top: 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        /* Estados vazios */
+        .nenhuma-noticia {
+            text-align: center;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 8px;
+            margin: 40px 0;
+        }
+
+        .nenhuma-noticia h2 {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
+            background: #c4170c;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-block;
+            margin-top: 20px;
+        }
+
+        /* Responsividade */
+        @media (max-width: 1024px) {
+            .manchete-link {
+                grid-template-columns: 1fr;
+            }
+
+            .manchete-imagem {
+                height: 300px;
+            }
+
+            .destaques-secundarios {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .grid-noticias {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+
+            .nav-principal {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: #c4170c;
+                flex-direction: column;
+                padding: 20px;
+            }
+
+            .nav-principal.active {
+                display: flex;
+            }
+
+            .user-area {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .auth-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn-login,
+            .btn-register {
+                text-align: center;
+            }
+
+            .destaques-secundarios {
+                grid-template-columns: 1fr;
+            }
+
+            .layout-principal {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+
+            .manchete-titulo {
+                font-size: 28px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 0 10px;
+            }
+
+            .manchete-titulo {
+                font-size: 24px;
+            }
+
+            .manchete-conteudo {
+                padding: 20px;
+            }
+
+            .manchete-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -124,106 +837,125 @@ $mais_lidas = $pdo->query("
     </section>
 
     <main class="container">
-        <!-- Manchete Principal -->
-        <section class="manchete-principal">
-            <a href="noticia.php?slug=<?= $manchete['slug'] ?>" class="manchete-link">
-                <div class="manchete-imagem">
-                    <img src="uploads/noticias/<?= $manchete['imagem'] ?>" alt="<?= htmlspecialchars($manchete['titulo']) ?>">
-                    <span class="categoria-badge" style="background: <?= $manchete['categoria_cor'] ?>">
-                        <?= $manchete['categoria_nome'] ?>
-                    </span>
-                </div>
-                <div class="manchete-conteudo">
-                    <h1 class="manchete-titulo"><?= htmlspecialchars($manchete['titulo']) ?></h1>
-                    <p class="manchete-resumo"><?= htmlspecialchars($manchete['resumo']) ?></p>
-                    <div class="manchete-meta">
-                        <span class="autor">Por <?= $manchete['autor_nome'] ?></span>
-                        <span class="data"><?= formatarData($manchete['data']) ?></span>
-                        <span class="visualizacoes">👁️ <?= $manchete['visualizacoes'] ?></span>
+        <?php if ($manchete): ?>
+            <!-- Manchete Principal -->
+            <section class="manchete-principal">
+                <a href="noticia.php?slug=<?= $manchete['slug'] ?>" class="manchete-link">
+                    <div class="manchete-imagem">
+                        <img src="uploads/noticias/<?= $manchete['imagem'] ?>"
+                            alt="<?= htmlspecialchars($manchete['titulo']) ?>"
+                            onerror="this.src='assets/img/defaults/noticia.jpg'">
+                        <span class="categoria-badge" style="background: <?= $manchete['categoria_cor'] ?>">
+                            <?= $manchete['categoria_nome'] ?>
+                        </span>
                     </div>
-                </div>
-            </a>
-        </section>
+                    <div class="manchete-conteudo">
+                        <h1 class="manchete-titulo"><?= htmlspecialchars($manchete['titulo']) ?></h1>
+                        <p class="manchete-resumo"><?= htmlspecialchars($manchete['resumo']) ?></p>
+                        <div class="manchete-meta">
+                            <span class="autor">Por <?= $manchete['autor_nome'] ?></span>
+                            <span class="data"><?= formatarData($manchete['data']) ?></span>
+                            <span class="visualizacoes">👁️ <?= $manchete['visualizacoes'] ?></span>
+                        </div>
+                    </div>
+                </a>
+            </section>
 
-        <!-- Destaques Secundários -->
-        <section class="destaques-secundarios">
-            <?php foreach ($destaques as $destaque): ?>
-                <article class="destaque-card">
-                    <a href="noticia.php?slug=<?= $destaque['slug'] ?>">
-                        <div class="destaque-imagem">
-                            <img src="uploads/noticias/<?= $destaque['imagem'] ?>" alt="<?= htmlspecialchars($destaque['titulo']) ?>">
-                        </div>
-                        <div class="destaque-conteudo">
-                            <h3><?= htmlspecialchars($destaque['titulo']) ?></h3>
-                            <div class="destaque-meta">
-                                <span class="categoria"><?= $destaque['categoria_nome'] ?></span>
-                                <span class="data"><?= formatarData($destaque['data']) ?></span>
-                            </div>
-                        </div>
-                    </a>
-                </article>
-            <?php endforeach; ?>
-        </section>
+            <!-- Destaques Secundários -->
+            <?php if (!empty($destaques)): ?>
+                <section class="destaques-secundarios">
+                    <?php foreach ($destaques as $destaque): ?>
+                        <article class="destaque-card">
+                            <a href="noticia.php?slug=<?= $destaque['slug'] ?>">
+                                <div class="destaque-imagem">
+                                    <img src="uploads/noticias/<?= $destaque['imagem'] ?>"
+                                        alt="<?= htmlspecialchars($destaque['titulo']) ?>"
+                                        onerror="this.src='assets/img/defaults/noticia.jpg'">
+                                </div>
+                                <div class="destaque-conteudo">
+                                    <h3><?= htmlspecialchars($destaque['titulo']) ?></h3>
+                                    <div class="destaque-meta">
+                                        <span class="categoria"><?= $destaque['categoria_nome'] ?></span>
+                                        <span class="data"><?= formatarData($destaque['data']) ?></span>
+                                    </div>
+                                </div>
+                            </a>
+                        </article>
+                    <?php endforeach; ?>
+                </section>
+            <?php endif; ?>
+        <?php else: ?>
+            <!-- Se não houver notícias -->
+            <section class="nenhuma-noticia">
+                <h2>📭 Nenhuma notícia publicada ainda</h2>
+                <p>Seja o primeiro a publicar uma notícia!</p>
+                <?php if ($usuario && ehEditor($usuario)): ?>
+                    <a href="noticias/nova_noticia.php" class="btn-primary">📝 Publicar Primeira Notícia</a>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
 
         <div class="layout-principal">
             <!-- Conteúdo Principal -->
             <div class="conteudo-principal">
                 <!-- Notícias por Categoria -->
                 <?php foreach ($noticias_por_categoria as $categoria_nome => $noticias_cat): ?>
-                    <?php if (!empty($noticias_cat)): ?>
-                        <section class="categoria-section">
-                            <h2 class="titulo-categoria">
-                                <?= $categoria_nome ?>
-                                <a href="noticias/categoria.php?cat=<?= slugify($categoria_nome) ?>" class="ver-tudo">
-                                    Ver tudo →
-                                </a>
-                            </h2>
-                            <div class="grid-noticias">
-                                <?php foreach ($noticias_cat as $noticia): ?>
-                                    <article class="noticia-card">
-                                        <a href="noticia.php?slug=<?= $noticia['slug'] ?>">
-                                            <div class="noticia-imagem">
-                                                <img src="uploads/noticias/<?= $noticia['imagem'] ?>" alt="<?= htmlspecialchars($noticia['titulo']) ?>">
+                    <section class="categoria-section">
+                        <h2 class="titulo-categoria">
+                            <?= $categoria_nome ?>
+                            <a href="noticias/categoria.php?cat=<?= slugify($categoria_nome) ?>" class="ver-tudo">
+                                Ver tudo →
+                            </a>
+                        </h2>
+                        <div class="grid-noticias">
+                            <?php foreach ($noticias_cat as $noticia): ?>
+                                <article class="noticia-card">
+                                    <a href="noticia.php?slug=<?= $noticia['slug'] ?>">
+                                        <div class="noticia-imagem">
+                                            <img src="uploads/noticias/<?= $noticia['imagem'] ?>"
+                                                alt="<?= htmlspecialchars($noticia['titulo']) ?>"
+                                                onerror="this.src='assets/img/defaults/noticia.jpg'">
+                                        </div>
+                                        <div class="noticia-conteudo">
+                                            <h3><?= htmlspecialchars($noticia['titulo']) ?></h3>
+                                            <p class="noticia-resumo"><?= htmlspecialchars($noticia['resumo']) ?></p>
+                                            <div class="noticia-meta">
+                                                <span class="autor"><?= $noticia['autor_nome'] ?></span>
+                                                <span class="data"><?= formatarData($noticia['data']) ?></span>
                                             </div>
-                                            <div class="noticia-conteudo">
-                                                <h3><?= htmlspecialchars($noticia['titulo']) ?></h3>
-                                                <p class="noticia-resumo"><?= htmlspecialchars($noticia['resumo']) ?></p>
-                                                <div class="noticia-meta">
-                                                    <span class="autor"><?= $noticia['autor_nome'] ?></span>
-                                                    <span class="data"><?= formatarData($noticia['data']) ?></span>
-                                                </div>
-                                            </div>
-                                        </a>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
-                        </section>
-                    <?php endif; ?>
+                                        </div>
+                                    </a>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
                 <?php endforeach; ?>
             </div>
 
             <!-- Sidebar -->
             <aside class="sidebar">
                 <!-- Mais Lidas -->
-                <section class="sidebar-widget">
-                    <h3>📈 Mais Lidas da Semana</h3>
-                    <div class="mais-lidas-list">
-                        <?php foreach ($mais_lidas as $index => $noticia): ?>
-                            <article class="mais-lida-item">
-                                <span class="ranking"><?= $index + 1 ?></span>
-                                <div class="conteudo">
-                                    <a href="noticia.php?slug=<?= $noticia['slug'] ?>">
-                                        <h4><?= htmlspecialchars($noticia['titulo']) ?></h4>
-                                    </a>
-                                    <div class="meta">
-                                        <span class="categoria"><?= $noticia['categoria_nome'] ?></span>
-                                        <span class="visualizacoes"><?= $noticia['total_visualizacoes'] ?? 0 ?> visualizações</span>
+                <?php if (!empty($mais_lidas)): ?>
+                    <section class="sidebar-widget">
+                        <h3>📈 Mais Lidas da Semana</h3>
+                        <div class="mais-lidas-list">
+                            <?php foreach ($mais_lidas as $index => $noticia): ?>
+                                <article class="mais-lida-item">
+                                    <span class="ranking"><?= $index + 1 ?></span>
+                                    <div class="conteudo">
+                                        <a href="noticia.php?slug=<?= $noticia['slug'] ?>">
+                                            <h4><?= htmlspecialchars($noticia['titulo']) ?></h4>
+                                        </a>
+                                        <div class="meta">
+                                            <span class="categoria"><?= $noticia['categoria_nome'] ?></span>
+                                            <span class="visualizacoes"><?= $noticia['total_visualizacoes'] ?> visualizações</span>
+                                        </div>
                                     </div>
-                                </div>
-                            </article>
-                        <?php endforeach; ?>
-                    </div>
-                </section>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                <?php endif; ?>
 
                 <!-- Newsletter -->
                 <section class="sidebar-widget newsletter-widget">
@@ -278,8 +1010,35 @@ $mais_lidas = $pdo->query("
         </div>
     </footer>
 
-    <script src="assets/js/theme.js"></script>
-    <script src="assets/js/main.js"></script>
+    <script>
+        // Menu mobile toggle
+        document.getElementById('menu-toggle').addEventListener('click', function() {
+            document.getElementById('nav-principal').classList.toggle('active');
+        });
+
+        // Tema claro/escuro
+        document.getElementById('btn-theme').addEventListener('click', function() {
+            document.body.classList.toggle('dark-theme');
+
+            // Salvar preferência
+            if (document.body.classList.contains('dark-theme')) {
+                localStorage.setItem('theme', 'dark');
+                this.textContent = '☀️';
+            } else {
+                localStorage.setItem('theme', 'light');
+                this.textContent = '🌙';
+            }
+        });
+
+        // Carregar tema salvo
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-theme');
+                document.getElementById('btn-theme').textContent = '☀️';
+            }
+        });
+    </script>
 </body>
 
 </html>
