@@ -21,19 +21,20 @@ if (isset($_SESSION['erro'])) {
     unset($_SESSION['erro']);
 }
 
-// Buscar todas as notícias
-$noticias = $pdo->query("
-    SELECT n.*, u.nome as autor_nome, c.nome as categoria_nome 
-    FROM noticias n 
-    JOIN usuarios u ON n.autor = u.id 
-    JOIN categorias c ON n.categoria = c.id 
-    ORDER BY n.data DESC
+// Buscar todos os usuários (AGORA COM A COLUNA 'status')
+$usuarios = $pdo->query("
+    SELECT id, nome, email, tipo, status, criado_em 
+    FROM usuarios 
+    ORDER BY criado_em DESC
 ")->fetchAll();
 
 // Estatísticas
-$total_noticias = $pdo->query("SELECT COUNT(*) as total FROM noticias")->fetch()['total'];
-$noticias_publicadas = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE status = 'publicado'")->fetch()['total'];
-$noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE status = 'rascunho'")->fetch()['total'];
+$total_usuarios = $pdo->query("SELECT COUNT(*) as total FROM usuarios")->fetch()['total'];
+$total_admins = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE tipo = 'admin'")->fetch()['total'];
+$total_editores = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE tipo = 'editor'")->fetch()['total'];
+$total_leitores = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE tipo = 'usuario'")->fetch()['total'];
+$total_ativos = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE status = 'ativo'")->fetch()['total'];
+$total_inativos = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE status = 'inativo'")->fetch()['total'];
 ?>
 
 <!DOCTYPE html>
@@ -42,7 +43,7 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Notícias - Admin</title>
+    <title>Gerenciar Usuários - Admin</title>
     <style>
         * {
             margin: 0;
@@ -62,6 +63,7 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             --danger: #dc3545;
             --info: #17a2b8;
             --purple: #6f42c1;
+            --teal: #20c997;
         }
 
         body {
@@ -131,13 +133,6 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             font-weight: 600;
         }
 
-        .nav-links i {
-            margin-right: 12px;
-            font-size: 18px;
-            width: 20px;
-            text-align: center;
-        }
-
         /* Main Content */
         .main-content {
             flex: 1;
@@ -198,7 +193,6 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             text-align: center;
             transition: all 0.3s ease;
-            border-top: 4px solid var(--primary);
             position: relative;
             overflow: hidden;
         }
@@ -210,7 +204,30 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             left: 0;
             right: 0;
             height: 4px;
+        }
+
+        .stat-card.total::before {
             background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+        }
+
+        .stat-card.admins::before {
+            background: linear-gradient(90deg, var(--danger), #c82333);
+        }
+
+        .stat-card.editors::before {
+            background: linear-gradient(90deg, var(--warning), #e0a800);
+        }
+
+        .stat-card.readers::before {
+            background: linear-gradient(90deg, var(--info), #138496);
+        }
+
+        .stat-card.ativos::before {
+            background: linear-gradient(90deg, var(--success), #1e7e34);
+        }
+
+        .stat-card.inativos::before {
+            background: linear-gradient(90deg, #6c757d, #495057);
         }
 
         .stat-card:hover {
@@ -218,24 +235,13 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
 
-        .stat-card.total {
-            border-top-color: var(--primary);
-        }
-
-        .stat-card.published {
-            border-top-color: var(--success);
-        }
-
-        .stat-card.draft {
-            border-top-color: var(--warning);
-        }
-
-        .stat-card.views {
-            border-top-color: var(--info);
+        .stat-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
         }
 
         .stat-number {
-            font-size: 2.5em;
+            font-size: 2.2em;
             font-weight: 800;
             margin: 10px 0;
             background: linear-gradient(135deg, var(--secondary), var(--primary));
@@ -267,6 +273,7 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
                 opacity: 0;
                 transform: translateY(-10px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -388,6 +395,56 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             border-bottom: none;
         }
 
+        /* User Avatar in Table */
+        .user-avatar-sm {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        .user-info-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Type Badges */
+        .type-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid;
+        }
+
+        .type-admin {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        .type-editor {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+
+        .type-usuario {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+
         /* Status Badges */
         .status-badge {
             padding: 6px 12px;
@@ -396,24 +453,19 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            border: 1px solid;
         }
 
-        .status-publicado {
+        .status-ativo {
             background: #d4edda;
             color: #155724;
-            border: 1px solid #c3e6cb;
+            border-color: #c3e6cb;
         }
 
-        .status-rascunho {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-
-        .status-pendente {
+        .status-inativo {
             background: #f8d7da;
             color: #721c24;
-            border: 1px solid #f5c6cb;
+            border-color: #f5c6cb;
         }
 
         /* Action Buttons */
@@ -421,12 +473,6 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             display: flex;
             gap: 8px;
             justify-content: center;
-        }
-
-        .btn-view {
-            background: var(--info);
-            color: white;
-            border: none;
         }
 
         .btn-edit {
@@ -441,7 +487,22 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             border: none;
         }
 
-        .btn-view:hover, .btn-edit:hover, .btn-delete:hover {
+        .btn-promote {
+            background: var(--success);
+            color: white;
+            border: none;
+        }
+
+        .btn-toggle-status {
+            background: var(--info);
+            color: white;
+            border: none;
+        }
+
+        .btn-edit:hover,
+        .btn-delete:hover,
+        .btn-promote:hover,
+        .btn-toggle-status:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
@@ -464,13 +525,64 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             color: #333;
         }
 
+        /* Search and Filters */
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 45px 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(196, 23, 12, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+
+        .filter-select {
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            min-width: 150px;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .sidebar {
                 width: 250px;
             }
+
             .main-content {
                 margin-left: 250px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
 
@@ -480,22 +592,34 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
                 height: auto;
                 position: relative;
             }
+
             .main-content {
                 margin-left: 0;
                 padding: 20px;
             }
+
             .stats-grid {
                 grid-template-columns: 1fr;
             }
+
             .section-header {
                 flex-direction: column;
                 gap: 15px;
                 align-items: flex-start;
             }
+
             .header {
                 flex-direction: column;
                 gap: 15px;
                 text-align: center;
+            }
+
+            .filters {
+                flex-direction: column;
+            }
+
+            .search-box {
+                min-width: 100%;
             }
         }
     </style>
@@ -511,8 +635,8 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             </div>
             <nav class="nav-links">
                 <a href="index.php">📊 Dashboard</a>
-                <a href="noticias.php" class="active">📰 Gerenciar Notícias</a>
-                <a href="usuarios.php">👥 Gerenciar Usuários</a>
+                <a href="noticias.php">📰 Gerenciar Notícias</a>
+                <a href="usuarios.php" class="active">👥 Gerenciar Usuários</a>
                 <a href="categorias.php">📂 Gerenciar Categorias</a>
                 <a href="comentarios.php">💬 Moderar Comentários</a>
                 <a href="../index.php">🏠 Voltar ao Site</a>
@@ -522,7 +646,7 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
 
         <main class="main-content">
             <div class="header">
-                <h1>📰 Gerenciar Notícias</h1>
+                <h1>👥 Gerenciar Usuários</h1>
                 <div class="user-info">
                     <div class="user-avatar">
                         <?= strtoupper(substr($usuario['nome'], 0, 1)) ?>
@@ -543,95 +667,146 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
             <!-- Stats -->
             <div class="stats-grid">
                 <div class="stat-card total">
-                    <div class="stat-number"><?= $total_noticias ?></div>
-                    <div class="stat-label">Total de Notícias</div>
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-number"><?= $total_usuarios ?></div>
+                    <div class="stat-label">Total de Usuários</div>
                 </div>
-                <div class="stat-card published">
-                    <div class="stat-number"><?= $noticias_publicadas ?></div>
-                    <div class="stat-label">Publicadas</div>
+                <div class="stat-card admins">
+                    <div class="stat-icon">👑</div>
+                    <div class="stat-number"><?= $total_admins ?></div>
+                    <div class="stat-label">Administradores</div>
                 </div>
-                <div class="stat-card draft">
-                    <div class="stat-number"><?= $noticias_rascunho ?></div>
-                    <div class="stat-label">Rascunhos</div>
+                <div class="stat-card editors">
+                    <div class="stat-icon">✏️</div>
+                    <div class="stat-number"><?= $total_editores ?></div>
+                    <div class="stat-label">Editores</div>
                 </div>
-                <div class="stat-card views">
-                    <div class="stat-number">
-                        <?= array_sum(array_column($noticias, 'visualizacoes')) ?>
-                    </div>
-                    <div class="stat-label">Visualizações</div>
+                <div class="stat-card readers">
+                    <div class="stat-icon">📖</div>
+                    <div class="stat-number"><?= $total_leitores ?></div>
+                    <div class="stat-label">Leitores</div>
+                </div>
+                <div class="stat-card ativos">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-number"><?= $total_ativos ?></div>
+                    <div class="stat-label">Ativos</div>
+                </div>
+                <div class="stat-card inativos">
+                    <div class="stat-icon">⏸️</div>
+                    <div class="stat-number"><?= $total_inativos ?></div>
+                    <div class="stat-label">Inativos</div>
                 </div>
             </div>
 
             <div class="section">
                 <div class="section-header">
-                    <h2>📋 Todas as Notícias</h2>
-                    <a href="../noticias/nova_noticia.php" class="btn btn-primary">
-                        ➕ Nova Notícia
+                    <h2>📋 Todos os Usuários</h2>
+                    <a href="novo_usuario.php" class="btn btn-primary">
+                        ➕ Novo Usuário
                     </a>
                 </div>
 
-                <?php if (empty($noticias)): ?>
+                <!-- Filters -->
+                <div class="filters">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="🔍 Buscar usuários...">
+                        <div class="search-icon">🔍</div>
+                    </div>
+                    <select class="filter-select" id="typeFilter">
+                        <option value="">Todos os Tipos</option>
+                        <option value="admin">Administradores</option>
+                        <option value="editor">Editores</option>
+                        <option value="usuario">Leitores</option>
+                    </select>
+                    <select class="filter-select" id="statusFilter">
+                        <option value="">Todos os Status</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="inativo">Inativos</option>
+                    </select>
+                </div>
+
+                <?php if (empty($usuarios)): ?>
                     <div class="empty-state">
-                        <div class="icon">📝</div>
-                        <h3>Nenhuma notícia encontrada</h3>
-                        <p>Comece criando sua primeira notícia!</p>
-                        <a href="../noticias/nova_noticia.php" class="btn btn-primary" style="margin-top: 20px;">
-                            ➕ Criar Primeira Notícia
+                        <div class="icon">👥</div>
+                        <h3>Nenhum usuário encontrado</h3>
+                        <p>Comece criando o primeiro usuário!</p>
+                        <a href="novo_usuario.php" class="btn btn-primary" style="margin-top: 20px;">
+                            ➕ Criar Primeiro Usuário
                         </a>
                     </div>
                 <?php else: ?>
                     <div class="table-container">
-                        <table class="table">
+                        <table class="table" id="usersTable">
                             <thead>
                                 <tr>
-                                    <th>Título</th>
-                                    <th>Autor</th>
-                                    <th>Categoria</th>
-                                    <th>Data</th>
-                                    <th>Visualizações</th>
+                                    <th>Usuário</th>
+                                    <th>Email</th>
+                                    <th>Tipo</th>
+                                    <th>Data Cadastro</th>
                                     <th>Status</th>
                                     <th style="text-align: center;">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($noticias as $noticia): ?>
+                                <?php foreach ($usuarios as $user): ?>
                                     <tr>
-                                        <td style="font-weight: 600; color: var(--secondary);">
-                                            <?= htmlspecialchars($noticia['titulo']) ?>
-                                        </td>
-                                        <td><?= $noticia['autor_nome'] ?></td>
                                         <td>
-                                            <span style="background: #e9ecef; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-                                                <?= $noticia['categoria_nome'] ?>
+                                            <div class="user-info-cell">
+                                                <div class="user-avatar-sm">
+                                                    <?= strtoupper(substr($user['nome'], 0, 1)) ?>
+                                                </div>
+                                                <div>
+                                                    <div style="font-weight: 600; color: var(--secondary);">
+                                                        <?= htmlspecialchars($user['nome']) ?>
+                                                    </div>
+                                                    <div style="font-size: 12px; color: #666;">
+                                                        ID: <?= $user['id'] ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><?= $user['email'] ?></td>
+                                        <td>
+                                            <span class="type-badge type-<?= $user['tipo'] ?>">
+                                                <?= ucfirst($user['tipo']) ?>
                                             </span>
                                         </td>
-                                        <td><?= date('d/m/Y H:i', strtotime($noticia['data'])) ?></td>
-                                        <td style="text-align: center; font-weight: 600;">
-                                            <?= $noticia['visualizacoes'] ?>
-                                        </td>
+                                        <td><?= date('d/m/Y H:i', strtotime($user['criado_em'])) ?></td>
                                         <td>
-                                            <span class="status-badge status-<?= $noticia['status'] ?>">
-                                                <?= ucfirst($noticia['status']) ?>
+                                            <span class="status-badge status-<?= $user['status'] ?>">
+                                                <?= ucfirst($user['status']) ?>
                                             </span>
                                         </td>
                                         <td>
                                             <div class="action-buttons">
-                                                <a href="../noticia.php?slug=<?= $noticia['slug'] ?>" 
-                                                   class="btn btn-view btn-sm"
-                                                   title="Visualizar">
-                                                   👁️
+                                                <a href="editar_usuario.php?id=<?= $user['id'] ?>"
+                                                    class="btn btn-edit btn-sm"
+                                                    title="Editar Usuário">
+                                                    ✏️
                                                 </a>
-                                                <a href="editar_noticia.php?id=<?= $noticia['id'] ?>" 
-                                                   class="btn btn-edit btn-sm"
-                                                   title="Editar">
-                                                   ✏️
-                                                </a>
-                                                <a href="excluir_noticia.php?id=<?= $noticia['id'] ?>" 
-                                                   class="btn btn-delete btn-sm"
-                                                   title="Excluir"
-                                                   onclick="return confirm('Tem certeza que deseja excluir esta notícia?')">
-                                                   🗑️
-                                                </a>
+                                                <?php if ($user['id'] != $usuario['id']): ?>
+                                                    <a href="alternar_status.php?id=<?= $user['id'] ?>"
+                                                        class="btn btn-toggle-status btn-sm"
+                                                        title="<?= $user['status'] == 'ativo' ? 'Desativar' : 'Ativar' ?> Usuário">
+                                                        <?= $user['status'] == 'ativo' ? '⏸️' : '✅' ?>
+                                                    </a>
+                                                    <?php if ($user['tipo'] != 'admin'): ?>
+                                                        <a href="promover_usuario.php?id=<?= $user['id'] ?>&tipo=admin"
+                                                            class="btn btn-promote btn-sm"
+                                                            title="Promover para Admin"
+                                                            onclick="return confirm('Promover este usuário para administrador?')">
+                                                            👑
+                                                        </a>
+                                                    <?php endif; ?>
+                                                    <a href="excluir_usuario.php?id=<?= $user['id'] ?>"
+                                                        class="btn btn-delete btn-sm"
+                                                        title="Excluir Usuário"
+                                                        onclick="return confirm('Tem certeza que deseja excluir este usuário?')">
+                                                        🗑️
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span style="color: #666; font-size: 12px;">Você</span>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
@@ -645,13 +820,43 @@ $noticias_rascunho = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE s
     </div>
 
     <script>
-        // Adiciona animação suave às linhas da tabela
+        // Filtros e busca
         document.addEventListener('DOMContentLoaded', function() {
-            const rows = document.querySelectorAll('.table tbody tr');
-            rows.forEach((row, index) => {
-                row.style.animationDelay = `${index * 0.1}s`;
-            });
+            const searchInput = document.getElementById('searchInput');
+            const typeFilter = document.getElementById('typeFilter');
+            const statusFilter = document.getElementById('statusFilter');
+            const table = document.getElementById('usersTable');
+            const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+            function filterUsers() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const typeValue = typeFilter.value;
+                const statusValue = statusFilter.value;
+
+                for (let row of rows) {
+                    const name = row.cells[0].textContent.toLowerCase();
+                    const email = row.cells[1].textContent.toLowerCase();
+                    const type = row.cells[2].textContent.toLowerCase();
+                    const status = row.cells[4].textContent.toLowerCase();
+
+                    const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
+                    const matchesType = !typeValue || type.includes(typeValue);
+                    const matchesStatus = !statusValue || status.includes(statusValue);
+
+                    row.style.display = matchesSearch && matchesType && matchesStatus ? '' : 'none';
+                }
+            }
+
+            searchInput.addEventListener('input', filterUsers);
+            typeFilter.addEventListener('change', filterUsers);
+            statusFilter.addEventListener('change', filterUsers);
+
+            // Adiciona animação suave às linhas da tabela
+            for (let i = 0; i < rows.length; i++) {
+                rows[i].style.animationDelay = `${i * 0.05}s`;
+            }
         });
     </script>
 </body>
+
 </html>

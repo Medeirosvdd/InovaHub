@@ -5,24 +5,18 @@ require '../includes/funcoes.php';
 
 $usuario = usuarioLogado($pdo);
 
-// Para admin: só admin pode acessar
-if (!$usuario || !ehAdmin($usuario)) {
-    header('Location: ../index.php');
-    exit();
-}
+// DEBUG - REMOVER DEPOIS DE TESTAR
+error_log("DEBUG EDITOR: Usuario: " . ($usuario ? $usuario['nome'] : 'NULO') .
+    " | Tipo: " . ($usuario ? $usuario['tipo'] : 'N/A') .
+    " | podePublicar: " . (podePublicar($usuario) ? 'SIM' : 'NÃO'));
 
-// Para editor: só editores e admins
+// VERIFICAÇÃO ÚNICA E CORRETA: Apenas editores e admins podem acessar
 if (!$usuario || !podePublicar($usuario)) {
     header('Location: ../index.php');
     exit();
 }
 
-// Para publicar: só editores e admins  
-if (!$usuario || !podePublicar($usuario)) {
-    header('Location: ../index.php');
-    exit();
-}
-// Apenas notícias do próprio usuário (exceto para admin)
+// Buscar notícias
 if (ehAdmin($usuario)) {
     $minhas_noticias = $pdo->query("
         SELECT n.*, c.nome as categoria_nome 
@@ -44,9 +38,29 @@ if (ehAdmin($usuario)) {
     $minhas_noticias = $stmt->fetchAll();
 }
 
-$total_minhas_noticias = ehAdmin($usuario) ?
-    $pdo->query("SELECT COUNT(*) as total FROM noticias")->fetch()['total'] :
-    $pdo->prepare("SELECT COUNT(*) as total FROM noticias WHERE autor = ?")->execute([$usuario['id']])->fetch()['total'];
+// CONTAGEM CORRIGIDA
+if (ehAdmin($usuario)) {
+    $total_minhas_noticias = $pdo->query("SELECT COUNT(*) as total FROM noticias")->fetch()['total'];
+} else {
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM noticias WHERE autor = ?");
+    $stmt->execute([$usuario['id']]);
+    $result = $stmt->fetch();
+    $total_minhas_noticias = $result['total'];
+}
+
+// Estatísticas adicionais para melhor UX
+if (ehAdmin($usuario)) {
+    $total_publicadas = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE status = 'publicado'")->fetch()['total'];
+    $total_rascunhos = $pdo->query("SELECT COUNT(*) as total FROM noticias WHERE status = 'rascunho'")->fetch()['total'];
+} else {
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM noticias WHERE autor = ? AND status = 'publicado'");
+    $stmt->execute([$usuario['id']]);
+    $total_publicadas = $stmt->fetch()['total'];
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM noticias WHERE autor = ? AND status = 'rascunho'");
+    $stmt->execute([$usuario['id']]);
+    $total_rascunhos = $stmt->fetch()['total'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -57,13 +71,287 @@ $total_minhas_noticias = ehAdmin($usuario) ?
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel do Editor - InovaHub</title>
     <style>
-        /* Mesmo CSS do admin, mas com cores diferentes */
-        :root {
-            --primary: #007bff;
-            --primary-dark: #0056b3;
-            --secondary: #495057;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
+        :root {
+            --primary: #c4170c;
+            --primary-dark: #a6140b;
+            --secondary: #2c3e50;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
+        body {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .admin-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: var(--secondary);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: var(--primary);
+            text-align: center;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .nav-links {
+            padding: 20px 0;
+        }
+
+        .nav-links a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: var(--primary);
+        }
+
+        .nav-links i {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 250px;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: var(--secondary);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card.news {
+            border-top: 4px solid var(--primary);
+        }
+
+        .stat-card.users {
+            border-top: 4px solid var(--success);
+        }
+
+        .stat-card.comments {
+            border-top: 4px solid var(--warning);
+        }
+
+        .stat-card.published {
+            border-top: 4px solid var(--danger);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Tables */
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .section-header h2 {
+            color: var(--secondary);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: var(--secondary);
+        }
+
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-publicado {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-rascunho {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-pendente {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-edit {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-view {
+            background: #6c757d;
+            color: white;
+        }
+
+        /* Editor specific styles */
         .editor-only {
             display: block;
         }
@@ -77,16 +365,40 @@ $total_minhas_noticias = ehAdmin($usuario) ?
         }
 
         <?php endif; ?>
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+        }
     </style>
 </head>
 
 <body>
     <div class="admin-container">
+        <!-- Sidebar -->
         <aside class="sidebar">
-            <div class="sidebar-header" style="background: var(--primary);">
+            <div class="sidebar-header">
                 <h1>✏️ InovaHub</h1>
                 <p>Painel do Editor</p>
             </div>
+
             <nav class="nav-links">
                 <a href="index.php" class="active">📊 Meu Dashboard</a>
                 <a href="minhas_noticias.php">📰 Minhas Notícias</a>
@@ -103,17 +415,19 @@ $total_minhas_noticias = ehAdmin($usuario) ?
             </nav>
         </aside>
 
+        <!-- Main Content -->
         <main class="main-content">
             <div class="header">
                 <h1>✏️ Painel do Editor</h1>
                 <div class="user-info">
-                    <div class="user-avatar" style="background: var(--primary);">
+                    <div class="user-avatar">
                         <?= strtoupper(substr($usuario['nome'], 0, 1)) ?>
                     </div>
                     <span>Olá, <?= $usuario['nome'] ?> (<?= $usuario['tipo'] ?>)</span>
                 </div>
             </div>
 
+            <!-- Stats -->
             <div class="stats-grid">
                 <div class="stat-card news">
                     <div class="stat-number"><?= $total_minhas_noticias ?></div>
@@ -121,9 +435,10 @@ $total_minhas_noticias = ehAdmin($usuario) ?
                         <?= ehAdmin($usuario) ? 'Total de Notícias' : 'Minhas Notícias' ?>
                     </div>
                 </div>
-                <!-- Mais stats específicas para editor -->
+                <!-- Mais stats específicas para editor podem ser adicionadas aqui -->
             </div>
 
+            <!-- Notícias Recentes -->
             <div class="section">
                 <div class="section-header">
                     <h2>📰 <?= ehAdmin($usuario) ? 'Todas as Notícias' : 'Minhas Notícias Recentes' ?></h2>
