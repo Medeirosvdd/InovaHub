@@ -10,91 +10,55 @@ if (!$usuario) {
     exit();
 }
 
-$idUsuario = $usuario['id'];
+// Se for editor ou admin, redireciona
+if (podePublicar($usuario)) {
+    if (ehAdmin($usuario)) {
+        header('Location: ../admin/index.php');
+    } else {
+        header('Location: ../editor/index.php');
+    }
+    exit();
+}
 
-$sql = "SELECT * FROM noticias WHERE autor = ? ORDER BY data DESC";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$idUsuario]);
-$noticias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Só continua aqui se for usuário comum
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
 
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard - <?= htmlspecialchars($usuario['nome']) ?> | InovaHub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Conta - InovaHub</title>
     <link rel="stylesheet" href="../assets/css/style.css">
 </head>
 
 <body>
+    <?php include '../includes/header.php'; ?>
 
-<header>
-    <h1>InovaHub</h1>
-    <nav>
-        <a href="../index.php">Início</a>
-        <a href="dashboard.php">Dashboard</a>
-        <a href="../noticias/nova_noticia.php">Publicar</a>
+    <main class="container">
+        <h1>👤 Minha Conta</h1>
 
-        <?php if (ehAdmin($usuario)): ?>
-            <a href="../admin/index.php">Admin</a>
-        <?php endif; ?>
-
-        <a href="../auth/logout.php">Sair (<?= htmlspecialchars($usuario['nome']) ?>)</a>
-        <button id="btn-theme">Tema</button>
-    </nav>
-</header>
-
-<main>
-
-    <h2>Minhas Notícias</h2>
-
-    <a href="../noticias/nova_noticia.php">
-        <button style="margin-bottom: 20px;">+ Nova Notícia</button>
-    </a>
-
-    <?php if (count($noticias) === 0): ?>
-        <p>Você ainda não publicou nenhuma notícia.</p>
-
-    <?php else: ?>
-
-        <?php foreach ($noticias as $n): ?>
-            <div class="card" style="align-items:center;">
-
-                <?php if (!empty($n['imagem'])): ?>
-                    <img src="../<?= htmlspecialchars($n['imagem']) ?>" class="card-thumbnail" alt="">
-                <?php else: ?>
-                    <img src="../assets/img/sem-imagem.png" class="card-thumbnail" alt="">
-                <?php endif; ?>
-
-                <div class="card-info">
-                    <h3><?= htmlspecialchars($n['titulo']) ?></h3>
-
-                    <p class="meta">
-                        Publicado em <?= date("d/m/Y H:i", strtotime($n['data'])) ?>
-                    </p>
-
-                    <p class="card-text">
-                        <?= resumoTexto($n['noticia'], 160) ?>
-                    </p>
-
-                    <br>
-
-                    <a href="../noticias/editar_noticia.php?id=<?= $n['id'] ?>">
-                        <button style="background:#00C3FF;color:#000;">Editar</button>
-                    </a>
-
-                    <a href="../noticias/excluir_noticia.php?id=<?= $n['id'] ?>">
-                        <button style="background:#ff5050;color:#fff;margin-left:10px;">Excluir</button>
-                    </a>
-                </div>
+        <div class="user-profile">
+            <div class="profile-card">
+                <h2>Bem-vindo, <?= htmlspecialchars($usuario['nome']) ?>!</h2>
+                <p>Email: <?= $usuario['email'] ?></p>
+                <p>Tipo de conta: <strong>Usuário</strong></p>
             </div>
-        <?php endforeach; ?>
 
-    <?php endif; ?>
+            <div class="user-actions">
+                <a href="editar_perfil.php" class="btn">✏️ Editar Perfil</a>
+                <a href="minhas_curtidas.php" class="btn">❤️ Notícias Curtidas</a>
+                <a href="meus_comentarios.php" class="btn">💬 Meus Comentários</a>
+            </div>
 
-</main>
+            <div class="upgrade-info">
+                <h3>💡 Quer publicar notícias?</h3>
+                <p>Entre em contato com os administradores para se tornar um editor.</p>
+            </div>
+        </div>
+    </main>
 
-<script src="../assets/js/theme.js"></script>
+    <?php include '../includes/footer.php'; ?>
 </body>
 
 </html>

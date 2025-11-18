@@ -4,31 +4,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!btn) return;
 
-    function setCookie(nome, valor, dias) {
-        const data = new Date();
-        data.setTime(data.getTime() + (dias * 24 * 60 * 60 * 1000));
-        document.cookie = nome + "=" + valor + ";expires=" + data.toUTCString() + ";path=/";
-    }
+    const temaSalvo = localStorage.getItem("tema_inovahub");
 
-    function getCookie(nome) {
-        const nomeEQ = nome + "=";
-        const cookies = document.cookie.split(';');
-        for (let c of cookies) {
-            c = c.trim();
-            if (c.indexOf(nomeEQ) === 0) return c.substring(nomeEQ.length);
-        }
-        return null;
-    }
-
-    const temaSalvo = getCookie('tema_inovahub');
-    if (temaSalvo === 'light') {
-        body.classList.add('light');
+    if (temaSalvo === "dark") {
+        body.classList.add("dark");
+        btn.textContent = "🌙";
+    } else {
+        btn.textContent = "☀️";
     }
 
     btn.addEventListener('click', function () {
-        body.classList.toggle('light');
-        const modoClaro = body.classList.contains('light');
+        body.classList.toggle("dark");
 
-        setCookie('tema_inovahub', modoClaro ? 'light' : 'dark', 365);
+        const modoEscuro = body.classList.contains("dark");
+
+        localStorage.setItem("tema_inovahub", modoEscuro ? "dark" : "light");
+
+        btn.textContent = modoEscuro ? "🌙" : "☀️";
     });
 });

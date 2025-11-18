@@ -1,0 +1,82 @@
+/* ================================
+   🌙 TEMA ESCURO
+   ================================ */
+body.dark {
+    background-color: #0d0d0d !important;
+    color: #f2f2f2 !important;
+}
+
+body.dark a {
+    color: #eeeeee !important;
+}
+
+/* Header */
+body.dark .topo {
+    background-color: #1a1a1a !important;
+    border-bottom: 3px solid #333 !important;
+}
+
+body.dark .logo a {
+    color: #fff !important;
+}
+
+/* Botão do tema */
+body.dark .btn-theme {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Cards / caixas */
+body.dark .manchete-principal,
+body.dark .destaque-card,
+body.dark .noticia-card,
+body.dark .sidebar-widget,
+body.dark .newsletter-widget,
+body.dark .nenhuma-noticia {
+    background-color: #1b1b1b !important;
+    color: #f2f2f2 !important;
+    border-color: #222 !important;
+}
+
+/* Textos secundários */
+body.dark .manchete-resumo,
+body.dark .noticia-resumo,
+body.dark .mais-lida-item .meta {
+    color: #ccc !important;
+}
+
+/* Inputs */
+body.dark input,
+body.dark textarea {
+    background-color: #262626 !important;
+    color: #fff !important;
+    border: 1px solid #333 !important;
+}
+
+/* Footer */
+body.dark .footer {
+    background-color: #111 !important;
+    color: #ccc !important;
+}
+
+body.dark .footer-section a {
+    color: #ccc !important;
+}
+
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}

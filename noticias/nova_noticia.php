@@ -5,6 +5,25 @@ require '../includes/funcoes.php';
 
 $usuario = usuarioLogado($pdo);
 
+
+// Para admin: só admin pode acessar
+if (!$usuario || !ehAdmin($usuario)) {
+    header('Location: ../index.php');
+    exit();
+}
+
+// Para editor: só editores e admins
+if (!$usuario || !podePublicar($usuario)) {
+    header('Location: ../index.php');
+    exit();
+}
+
+// Para publicar: só editores e admins  
+if (!$usuario || !podePublicar($usuario)) {
+    header('Location: ../index.php');
+    exit();
+}
+
 $erro = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
