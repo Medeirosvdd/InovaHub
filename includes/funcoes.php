@@ -61,3 +61,11 @@ function podeAcessarEditor($usuario)
 {
     return ehEditor($usuario); // Apenas editores e admins
 }
+
+function gerarSlug($texto)
+{
+    $slug = preg_replace('/[^a-z0-9-]/', '-', strtolower($texto));
+    $slug = preg_replace('/-+/', '-', $slug);
+    $slug = trim($slug, '-');
+    return $slug . '-' . uniqid();
+}

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Verifica se usuário está logado
  */
@@ -12,10 +11,10 @@ if (!isset($_SESSION['usuario_id'])) {
     exit();
 }
 
-// Verificar se usuário ainda existe e está ativo
+// Verificar se usuário ainda existe (REMOVA a verificação de 'ativo')
 require 'conexao.php';
 
-$stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = ? AND ativo = 1");
+$stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = ?"); // REMOVE: AND ativo = 1
 $stmt->execute([$_SESSION['usuario_id']]);
 $usuario = $stmt->fetch();
 
@@ -24,3 +23,4 @@ if (!$usuario) {
     header('Location: ../auth/login.php');
     exit();
 }
+?>

@@ -10,12 +10,18 @@
 
         $user = buscarUsuarioPorEmail($pdo, $email);
 
-        if ($user && password_verify($senha, $user['senha'])) {
-            $_SESSION['usuario_id'] = $user['id'];
-            $_SESSION['usuario_nome'] = $user['nome'];
-            $_SESSION['usuario_tipo'] = $user['tipo'];
-            header("Location: index.php");
-            exit();
+      if ($user && password_verify($senha, $user['senha'])) {
+    $_SESSION['usuario_id'] = $user['id'];
+    $_SESSION['usuario_nome'] = $user['nome'];
+    $_SESSION['usuario_tipo'] = $user['tipo'];
+    
+    // Fechar modal via JavaScript
+    echo "<script>
+        document.getElementById('modalLogin').style.display = 'none';
+        location.reload();
+    </script>";
+    exit();
+}
         } else {
             $erro_login = "E-mail ou senha inválidos.";
         }
@@ -41,7 +47,7 @@
                 $erro_login = "E-mail ou senha inválidos.";
             }
         }
-    }
+    
 
     $usuario = usuarioLogado($pdo);
 
@@ -1090,11 +1096,20 @@
                         <div class="user-menu">
                             <span class="user-greeting">Olá, <?= htmlspecialchars(explode(' ', $usuario['nome'])[0]) ?></span>
                             <div class="user-dropdown">
-                                <a href="usuario/dashboard.php" class="dropdown-item">📊 Dashboard</a>
-                                <a href="noticias/nova_noticia.php" class="dropdown-item">✏️ Publicar</a>
+                                <!-- Link do dashboard baseado no tipo de usuário -->
                                 <?php if (ehAdmin($usuario)): ?>
-                                    <a href="admin/index.php" class="dropdown-item">⚙️ Admin</a>
+                                    <a href="admin/index.php" class="dropdown-item">⚙️ Painel Admin</a>
+                                <?php elseif (ehEditor($usuario)): ?>
+                                    <a href="editor/index.php" class="dropdown-item">✏️ Painel Editor</a>
+                                <?php else: ?>
+                                    <a href="usuario/dashboard.php" class="dropdown-item">👤 Minha Conta</a>
                                 <?php endif; ?>
+
+                                <!-- Só mostra "Publicar" para editores e admins -->
+                                <?php if (podePublicar($usuario)): ?>
+                                    <a href="noticias/nova_noticia.php" class="dropdown-item">➕ Publicar Notícia</a>
+                                <?php endif; ?>
+
                                 <a href="auth/logout.php" class="dropdown-item">🚪 Sair</a>
                             </div>
                         </div>
