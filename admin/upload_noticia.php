@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Arquivo muito grande. Máximo 5MB.');
                 }
 
-                // ✅ LER O ARQUIVO E CONVERTER PARA BLOB
+                // Ler o arquivo e converter para BLOB
                 $imagem_blob = file_get_contents($imagem_arquivo['tmp_name']);
                 $tipo_imagem = $imagem_arquivo['type'];
 
@@ -60,12 +60,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // Gerar slug automático
-            $slug = gerarSlug($titulo);
+            $slug_base = gerarSlug($titulo);
+            $slug = $slug_base;
+            $contador = 1;
+
+            // Verificar se o slug já existe
+            while (true) {
+                $stmt = $pdo->prepare("SELECT id FROM noticias WHERE slug = ?");
+                $stmt->execute([$slug]);
+                $existe = $stmt->fetch();
+
+                if (!$existe) {
+                    break;
+                }
+
+                $slug = $slug_base . '-' . $contador;
+                $contador++;
+
+                if ($contador > 50) {
+                    $slug = $slug_base . '-' . uniqid();
+                    break;
+                }
+            }
 
             // Definir data de publicação se for publicada
             $publicada_em = $status === 'publicada' ? date('Y-m-d H:i:s') : null;
 
-            // ✅ INSERIR NO BANCO COM A IMAGEM COMO BLOB
+            // Inserir no banco com a imagem como BLOB
             $stmt = $pdo->prepare("
                 INSERT INTO noticias 
                 (titulo, slug, resumo, noticia, autor, imagem, tipo_imagem, categoria, status, destaque, publicada_em) 
@@ -78,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $resumo,
                 $texto,
                 $usuario['id'],
-                $imagem_blob,  // ✅ IMAGEM COMO BLOB
-                $tipo_imagem,  // ✅ TIPO DA IMAGEM
+                $imagem_blob,  // IMAGEM COMO BLOB
+                $tipo_imagem,  // TIPO DA IMAGEM
                 $categoria,
                 $status,
                 $destaque,

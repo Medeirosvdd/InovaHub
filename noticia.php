@@ -3,17 +3,17 @@ session_start();
 require 'includes/conexao.php';
 require 'includes/funcoes.php';
 
-// FUNÇÃO DE FALLBACK PARA IMAGENS
+// FUNÇÃO PARA BUSCAR IMAGENS
 function getImagemNoticia($nome_imagem)
 {
-    if (empty($nome_imagem)) {
+    if (empty($nome_imagem) || $nome_imagem === 'noticia.jpg') {
         return "assets/img/defaults/noticia.jpg";
     }
 
-    $caminho_local = "uploads/noticias/" . $nome_imagem;
+    $caminho_imagem = "uploads/noticias/" . $nome_imagem;
 
-    if (file_exists($caminho_local)) {
-        return $caminho_local;
+    if (file_exists($caminho_imagem)) {
+        return $caminho_imagem;
     } else {
         return "assets/img/defaults/noticia.jpg";
     }
@@ -280,6 +280,61 @@ $usuario = usuarioLogado($pdo);
                 font-size: var(--font-size-base);
             }
         }
+
+        .mensagem-success {
+            background: #d4edda;
+            color: #155724;
+            padding: var(--space-3);
+            border-radius: var(--radius);
+            margin: var(--space-3) 0;
+            border: 1px solid #c3e6cb;
+        }
+
+        .mensagem-error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: var(--space-3);
+            border-radius: var(--radius);
+            margin: var(--space-3) 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        #btn-enviar:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .comentario-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .comentarios-pendentes {
+            margin-bottom: var(--space-6);
+            padding: var(--space-4);
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: var(--radius);
+        }
+
+        .comentario-item.pendente {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            opacity: 0.8;
+        }
+
+        .comentario-item.pendente small {
+            color: #856404;
+            font-style: italic;
+        }
     </style>
 </head>
 
@@ -308,6 +363,7 @@ $usuario = usuarioLogado($pdo);
         <div class="container">
             <div class="layout-principal">
                 <div class="conteudo-principal">
+                    <!-- IMAGEM DA NOTÍCIA -->
                     <img src="<?= getImagemNoticia($noticia['imagem']) ?>" alt="<?= htmlspecialchars($noticia['titulo']) ?>" class="noticia-imagem-destaque">
 
                     <div class="noticia-conteudo">
@@ -322,20 +378,51 @@ $usuario = usuarioLogado($pdo);
                     </div>
 
                     <!-- Comentários -->
-                    <section class="comentarios-section">
-                        <h2>💬 Comentários (<?= count($comentarios) ?>)</h2>
+                    <section class="comentarios-section" id="comentarios">
+                        <h2>💬 Comentários (<span id="total-comentarios"><?= count($comentarios) ?></span>)</h2>
 
                         <?php if ($usuario): ?>
-                            <form class="form-comentario" method="POST" action="includes/comentar.php">
+                            <form class="form-comentario" id="form-comentario" method="POST">
                                 <input type="hidden" name="noticia_id" value="<?= $noticia['id'] ?>">
-                                <textarea name="comentario" placeholder="Deixe seu comentário..." required></textarea>
-                                <button type="submit" class="btn-enviar-comentario">Enviar Comentário</button>
+                                <textarea name="comentario" id="texto-comentario" placeholder="Deixe seu comentário..." required></textarea>
+                                <button type="submit" class="btn-enviar-comentario" id="btn-enviar">
+                                    <span id="btn-texto">Enviar Comentário</span>
+                                    <span id="btn-carregando" style="display: none;">⏳ Enviando...</span>
+                                </button>
                             </form>
+
+                            <div id="mensagem-comentario" style="display: none;"></div>
+
+                            <?php
+                            // Mostrar comentários pendentes do usuário atual
+                            $stmt_pendentes = $pdo->prepare("
+                                SELECT * FROM comentarios 
+                                WHERE noticia_id = ? AND usuario_id = ? AND aprovado = 0
+                                ORDER BY criado_em DESC
+                            ");
+                            $stmt_pendentes->execute([$noticia['id'], $usuario['id']]);
+                            $comentarios_pendentes = $stmt_pendentes->fetchAll();
+
+                            if (!empty($comentarios_pendentes)): ?>
+                                <div class="comentarios-pendentes">
+                                    <h4>⏳ Seus comentários pendentes de aprovação:</h4>
+                                    <?php foreach ($comentarios_pendentes as $pendente): ?>
+                                        <div class="comentario-item pendente">
+                                            <div class="comentario-header">
+                                                <strong><?= $usuario['nome'] ?></strong>
+                                                <span class="comentario-data"><?= formatarData($pendente['criado_em']) ?></span>
+                                            </div>
+                                            <p><?= nl2br(htmlspecialchars($pendente['comentario'])) ?></p>
+                                            <small><em>Aguardando aprovação da moderação</em></small>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         <?php else: ?>
                             <p><a href="auth/login.php">Faça login</a> para comentar.</p>
                         <?php endif; ?>
 
-                        <div class="lista-comentarios">
+                        <div class="lista-comentarios" id="lista-comentarios">
                             <?php foreach ($comentarios as $comentario): ?>
                                 <div class="comentario-item">
                                     <div class="comentario-header">
@@ -348,7 +435,7 @@ $usuario = usuarioLogado($pdo);
                             <?php endforeach; ?>
 
                             <?php if (empty($comentarios)): ?>
-                                <p>Seja o primeiro a comentar!</p>
+                                <p id="sem-comentarios">Seja o primeiro a comentar!</p>
                             <?php endif; ?>
                         </div>
                     </section>
@@ -415,6 +502,152 @@ $usuario = usuarioLogado($pdo);
 
             window.open(shareUrl, '_blank', 'width=600,height=400');
         }
+    </script>
+
+    <script>
+        document.getElementById('form-comentario').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const form = this;
+            const btnEnviar = document.getElementById('btn-enviar');
+            const btnTexto = document.getElementById('btn-texto');
+            const btnCarregando = document.getElementById('btn-carregando');
+            const mensagemDiv = document.getElementById('mensagem-comentario');
+            const textoComentario = document.getElementById('texto-comentario');
+
+            // Mostrar loading
+            btnTexto.style.display = 'none';
+            btnCarregando.style.display = 'inline';
+            btnEnviar.disabled = true;
+            mensagemDiv.style.display = 'none';
+
+            // Preparar dados do formulário
+            const formData = new FormData(form);
+
+            // Enviar via AJAX
+            fetch('includes/comentar.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        // Limpar formulário
+                        textoComentario.value = '';
+
+                        // Mostrar mensagem de sucesso
+                        mostrarMensagem(data.mensagem, 'success');
+
+                        // Se o comentário foi aprovado automaticamente, adicionar à lista
+                        if (data.comentario.aprovado) {
+                            adicionarComentarioNaLista(data.comentario);
+                        } else {
+                            // Se precisa de aprovação, mostrar na seção de pendentes
+                            atualizarComentariosPendentes(data.comentario);
+                        }
+                    } else {
+                        // Mostrar mensagem de erro
+                        mostrarMensagem(data.erro || 'Erro ao enviar comentário', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarMensagem('Erro de conexão. Tente novamente.', 'error');
+                })
+                .finally(() => {
+                    // Restaurar botão
+                    btnTexto.style.display = 'inline';
+                    btnCarregando.style.display = 'none';
+                    btnEnviar.disabled = false;
+                });
+        });
+
+        function mostrarMensagem(mensagem, tipo) {
+            const mensagemDiv = document.getElementById('mensagem-comentario');
+            mensagemDiv.textContent = mensagem;
+            mensagemDiv.className = `mensagem-${tipo}`;
+            mensagemDiv.style.display = 'block';
+
+            // Auto-esconder após 5 segundos
+            setTimeout(() => {
+                mensagemDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function adicionarComentarioNaLista(comentario) {
+            const listaComentarios = document.getElementById('lista-comentarios');
+            const semComentarios = document.getElementById('sem-comentarios');
+
+            // Remover mensagem "Seja o primeiro"
+            if (semComentarios) {
+                semComentarios.remove();
+            }
+
+            // Criar elemento do comentário
+            const comentarioHTML = `
+                <div class="comentario-item">
+                    <div class="comentario-header">
+                        <div class="comentario-avatar" style="
+                            width: 32px; 
+                            height: 32px; 
+                            border-radius: 50%; 
+                            background: #007bff; 
+                            color: white; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center; 
+                            font-weight: bold;
+                            margin-right: 10px;
+                        ">${comentario.avatar}</div>
+                        <strong>${comentario.usuario_nome}</strong>
+                        <span class="comentario-data">${comentario.criado_em}</span>
+                    </div>
+                    <p>${comentario.comentario.replace(/\n/g, '<br>')}</p>
+                </div>
+            `;
+
+            // Adicionar no início da lista
+            listaComentarios.insertAdjacentHTML('afterbegin', comentarioHTML);
+
+            // Atualizar contador
+            const totalElement = document.getElementById('total-comentarios');
+            const totalAtual = parseInt(totalElement.textContent) || 0;
+            totalElement.textContent = totalAtual + 1;
+        }
+
+        function atualizarComentariosPendentes(comentario) {
+            // Aqui você pode implementar a atualização da seção de comentários pendentes
+            // Por enquanto, vamos apenas mostrar a mensagem de sucesso
+            console.log('Comentário pendente adicionado:', comentario);
+        }
+
+        // CSS para as mensagens
+        const style = document.createElement('style');
+        style.textContent = `
+            .mensagem-success {
+                background: #d4edda;
+                color: #155724;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+                border: 1px solid #c3e6cb;
+            }
+            
+            .mensagem-error {
+                background: #f8d7da;
+                color: #721c24;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+                border: 1px solid #f5c6cb;
+            }
+            
+            #btn-enviar:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 

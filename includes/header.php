@@ -1,6 +1,9 @@
-<?php
-// includes/header.php
-?>
+<?php if (usuarioLogado($pdo) && podePublicar(usuarioLogado($pdo))): ?>
+    <li><a href="admin/upload_noticia.php">📝 Publicar Notícia</a></li>
+    <li><a href="admin/comentarios.php">🛡️ Moderar</a></li>
+<?php endif; ?>
+
+
 <!DOCTYPE html>
 <html lang="pt-br">
 
@@ -30,4 +33,4 @@
                 <?php endif; ?>
             </nav>
         </div>
-    </header>   
+    </header>
