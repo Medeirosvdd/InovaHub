@@ -21,7 +21,7 @@ if (isset($_SESSION['erro'])) {
     unset($_SESSION['erro']);
 }
 
-// Buscar todos os usuários (AGORA COM A COLUNA 'status')
+// Buscar todos os usuários
 $usuarios = $pdo->query("
     SELECT id, nome, email, tipo, status, criado_em 
     FROM usuarios 
@@ -468,43 +468,23 @@ $total_inativos = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE stat
             border-color: #f5c6cb;
         }
 
-        /* Action Buttons */
+        /* Action Buttons - AGORA SÓ UM BOTÃO */
         .action-buttons {
             display: flex;
             gap: 8px;
             justify-content: center;
         }
 
-        .btn-edit {
+        .btn-manage {
             background: var(--warning);
             color: white;
             border: none;
         }
 
-        .btn-delete {
-            background: var(--danger);
-            color: white;
-            border: none;
-        }
-
-        .btn-promote {
-            background: var(--success);
-            color: white;
-            border: none;
-        }
-
-        .btn-toggle-status {
-            background: var(--info);
-            color: white;
-            border: none;
-        }
-
-        .btn-edit:hover,
-        .btn-delete:hover,
-        .btn-promote:hover,
-        .btn-toggle-status:hover {
+        .btn-manage:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            background: #e0a800;
         }
 
         /* Empty State */
@@ -779,34 +759,12 @@ $total_inativos = $pdo->query("SELECT COUNT(*) as total FROM usuarios WHERE stat
                                         </td>
                                         <td>
                                             <div class="action-buttons">
+                                                <!-- APENAS UM BOTÃO QUE VAI PARA EDIÇÃO COMPLETA -->
                                                 <a href="editar_usuario.php?id=<?= $user['id'] ?>"
-                                                    class="btn btn-edit btn-sm"
-                                                    title="Editar Usuário">
-                                                    ✏️
+                                                    class="btn btn-manage btn-sm"
+                                                    title="Gerenciar Usuário">
+                                                    ⚙️ Gerenciar
                                                 </a>
-                                                <?php if ($user['id'] != $usuario['id']): ?>
-                                                    <a href="alternar_status.php?id=<?= $user['id'] ?>"
-                                                        class="btn btn-toggle-status btn-sm"
-                                                        title="<?= $user['status'] == 'ativo' ? 'Desativar' : 'Ativar' ?> Usuário">
-                                                        <?= $user['status'] == 'ativo' ? '⏸️' : '✅' ?>
-                                                    </a>
-                                                    <?php if ($user['tipo'] != 'admin'): ?>
-                                                        <a href="promover_usuario.php?id=<?= $user['id'] ?>&tipo=admin"
-                                                            class="btn btn-promote btn-sm"
-                                                            title="Promover para Admin"
-                                                            onclick="return confirm('Promover este usuário para administrador?')">
-                                                            👑
-                                                        </a>
-                                                    <?php endif; ?>
-                                                    <a href="excluir_usuario.php?id=<?= $user['id'] ?>"
-                                                        class="btn btn-delete btn-sm"
-                                                        title="Excluir Usuário"
-                                                        onclick="return confirm('Tem certeza que deseja excluir este usuário?')">
-                                                        🗑️
-                                                    </a>
-                                                <?php else: ?>
-                                                    <span style="color: #666; font-size: 12px;">Você</span>
-                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>

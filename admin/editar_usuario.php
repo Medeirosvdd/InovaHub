@@ -30,49 +30,147 @@ if (!$user_edit) {
     exit();
 }
 
-// Processar o formulário de edição
+// Processar TODAS as ações no mesmo arquivo
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nome = trim($_POST['nome']);
-    $email = trim($_POST['email']);
-    $tipo = $_POST['tipo'];
-    $status = $_POST['status'];
-    
-    // Validar dados
-    $erros = [];
-    
-    if (empty($nome)) {
-        $erros[] = "O nome é obrigatório.";
-    }
-    
-    if (empty($email)) {
-        $erros[] = "O email é obrigatório.";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erros[] = "Email inválido.";
-    } else {
-        // Verificar se email já existe (exceto para o próprio usuário)
-        $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
-        $stmt->execute([$email, $user_id]);
-        if ($stmt->fetch()) {
-            $erros[] = "Este email já está em uso por outro usuário.";
+
+    // AÇÃO: Salvar edições normais
+    if (isset($_POST['salvar_edicao'])) {
+        $nome = trim($_POST['nome']);
+        $email = trim($_POST['email']);
+        $tipo = $_POST['tipo'];
+        $status = $_POST['status'];
+
+        // Validar dados
+        $erros = [];
+
+        if (empty($nome)) {
+            $erros[] = "O nome é obrigatório.";
+        }
+
+        if (empty($email)) {
+            $erros[] = "O email é obrigatório.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $erros[] = "Email inválido.";
+        } else {
+            // Verificar se email já existe (exceto para o próprio usuário)
+            $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
+            $stmt->execute([$email, $user_id]);
+            if ($stmt->fetch()) {
+                $erros[] = "Este email já está em uso por outro usuário.";
+            }
+        }
+
+        // Se não há erros, atualizar o usuário
+        if (empty($erros)) {
+            try {
+                $stmt = $pdo->prepare("
+                    UPDATE usuarios 
+                    SET nome = ?, email = ?, tipo = ?, status = ?, atualizado_em = NOW() 
+                    WHERE id = ?
+                ");
+                $stmt->execute([$nome, $email, $tipo, $status, $user_id]);
+
+                $_SESSION['sucesso'] = "Usuário atualizado com sucesso!";
+                header('Location: usuarios.php');
+                exit();
+            } catch (Exception $e) {
+                $erros[] = "Erro ao atualizar usuário: " . $e->getMessage();
+            }
         }
     }
-    
-    // Se não há erros, atualizar o usuário
-    if (empty($erros)) {
+
+    // AÇÃO: Promover para Admin
+    elseif (isset($_POST['promover_admin'])) {
+        if ($user_edit['id'] == $usuario['id']) {
+            $erros[] = "Você não pode promover a si mesmo.";
+        } else {
+            try {
+                $stmt = $pdo->prepare("
+                    UPDATE usuarios 
+                    SET tipo = 'admin', atualizado_em = NOW() 
+                    WHERE id = ?
+                ");
+                $stmt->execute([$user_id]);
+
+                $_SESSION['sucesso'] = "✅ Usuário <strong>" . htmlspecialchars($user_edit['nome']) . "</strong> promovido para administrador com sucesso!";
+                header('Location: usuarios.php');
+                exit();
+            } catch (Exception $e) {
+                $erros[] = "Erro ao promover usuário: " . $e->getMessage();
+            }
+        }
+    }
+
+    // AÇÃO: Redefinir Senha
+    elseif (isset($_POST['redefinir_senha'])) {
+        $nova_senha = '123456'; // Senha padrão
+        $senha_hash = password_hash($nova_senha, PASSWORD_DEFAULT);
+
         try {
             $stmt = $pdo->prepare("
                 UPDATE usuarios 
-                SET nome = ?, email = ?, tipo = ?, status = ?, atualizado_em = NOW() 
+                SET senha = ?, atualizado_em = NOW() 
                 WHERE id = ?
             ");
-            $stmt->execute([$nome, $email, $tipo, $status, $user_id]);
-            
-            $_SESSION['sucesso'] = "Usuário atualizado com sucesso!";
+            $stmt->execute([$senha_hash, $user_id]);
+
+            $_SESSION['sucesso'] = "🔑 Senha redefinida com sucesso! Nova senha: <strong>123456</strong>";
             header('Location: usuarios.php');
             exit();
-            
         } catch (Exception $e) {
-            $erros[] = "Erro ao atualizar usuário: " . $e->getMessage();
+            $erros[] = "Erro ao redefinir senha: " . $e->getMessage();
+        }
+    }
+
+    // AÇÃO: Excluir usuário
+    elseif (isset($_POST['excluir_usuario'])) {
+        if ($user_edit['id'] == $usuario['id']) {
+            $erros[] = "❌ Você não pode excluir a si mesmo.";
+        } else {
+            try {
+                // Verificar se o usuário tem notícias publicadas
+                $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM noticias WHERE autor = ?");
+                $stmt->execute([$user_id]);
+                $total_noticias = $stmt->fetch()['total'];
+
+                if ($total_noticias > 0) {
+                    $erros[] = "⚠️ Este usuário possui <strong>$total_noticias notícia(s)</strong> publicada(s). Transfira as notícias para outro autor antes de excluir.";
+                } else {
+                    $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
+                    $stmt->execute([$user_id]);
+
+                    $_SESSION['sucesso'] = "🗑️ Usuário <strong>" . htmlspecialchars($user_edit['nome']) . "</strong> excluído com sucesso!";
+                    header('Location: usuarios.php');
+                    exit();
+                }
+            } catch (Exception $e) {
+                $erros[] = "Erro ao excluir usuário: " . $e->getMessage();
+            }
+        }
+    }
+
+    // AÇÃO: Alternar Status (Ativo/Inativo)
+    elseif (isset($_POST['alternar_status'])) {
+        if ($user_edit['id'] == $usuario['id']) {
+            $erros[] = "❌ Você não pode alterar seu próprio status.";
+        } else {
+            $novo_status = $user_edit['status'] == 'ativo' ? 'inativo' : 'ativo';
+
+            try {
+                $stmt = $pdo->prepare("
+                    UPDATE usuarios 
+                    SET status = ?, atualizado_em = NOW() 
+                    WHERE id = ?
+                ");
+                $stmt->execute([$novo_status, $user_id]);
+
+                $acao = $novo_status == 'ativo' ? 'ativado' : 'desativado';
+                $_SESSION['sucesso'] = "✅ Usuário <strong>" . htmlspecialchars($user_edit['nome']) . "</strong> $acao com sucesso!";
+                header('Location: usuarios.php');
+                exit();
+            } catch (Exception $e) {
+                $erros[] = "Erro ao alterar status: " . $e->getMessage();
+            }
         }
     }
 }
@@ -97,6 +195,7 @@ if (isset($_SESSION['erro'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editar Usuário - Admin</title>
     <style>
+        /* SEU CSS EXISTENTE - MANTENHA TUDO */
         * {
             margin: 0;
             padding: 0;
@@ -243,6 +342,7 @@ if (isset($_SESSION['erro'])) {
                 opacity: 0;
                 transform: translateY(-10px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -265,6 +365,12 @@ if (isset($_SESSION['erro'])) {
             background: #fff3cd;
             color: #856404;
             border-left-color: var(--warning);
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left-color: var(--info);
         }
 
         /* Form Section */
@@ -393,6 +499,26 @@ if (isset($_SESSION['erro'])) {
             transform: translateY(-2px);
         }
 
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+
         .btn-danger {
             background: var(--danger);
             color: white;
@@ -403,6 +529,16 @@ if (isset($_SESSION['erro'])) {
             transform: translateY(-2px);
         }
 
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+            transform: translateY(-2px);
+        }
+
         .form-actions {
             display: flex;
             gap: 15px;
@@ -410,6 +546,13 @@ if (isset($_SESSION['erro'])) {
             margin-top: 30px;
             padding-top: 20px;
             border-top: 2px solid #e9ecef;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         /* User Info Card */
@@ -492,6 +635,7 @@ if (isset($_SESSION['erro'])) {
             .sidebar {
                 width: 250px;
             }
+
             .main-content {
                 margin-left: 250px;
             }
@@ -503,21 +647,27 @@ if (isset($_SESSION['erro'])) {
                 height: auto;
                 position: relative;
             }
+
             .main-content {
                 margin-left: 0;
                 padding: 20px;
             }
+
             .form-grid {
                 grid-template-columns: 1fr;
             }
-            .form-actions {
+
+            .form-actions,
+            .action-buttons {
                 flex-direction: column;
             }
+
             .header {
                 flex-direction: column;
                 gap: 15px;
                 text-align: center;
             }
+
             .user-info-grid {
                 grid-template-columns: 1fr;
             }
@@ -557,11 +707,11 @@ if (isset($_SESSION['erro'])) {
 
             <!-- Alert Messages -->
             <?php if (isset($mensagem_sucesso)): ?>
-                <div class="alert alert-success">✅ <?= $mensagem_sucesso ?></div>
+                <div class="alert alert-success"><?= $mensagem_sucesso ?></div>
             <?php endif; ?>
 
             <?php if (isset($mensagem_erro)): ?>
-                <div class="alert alert-danger">❌ <?= $mensagem_erro ?></div>
+                <div class="alert alert-danger"><?= $mensagem_erro ?></div>
             <?php endif; ?>
 
             <?php if (!empty($erros)): ?>
@@ -610,6 +760,7 @@ if (isset($_SESSION['erro'])) {
                 </div>
             </div>
 
+            <!-- Formulário Principal -->
             <div class="form-section">
                 <div class="form-header">
                     <h2>📝 Informações do Usuário</h2>
@@ -619,24 +770,24 @@ if (isset($_SESSION['erro'])) {
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="nome">👤 Nome Completo *</label>
-                            <input type="text" 
-                                   id="nome" 
-                                   name="nome" 
-                                   class="form-control" 
-                                   value="<?= htmlspecialchars($user_edit['nome']) ?>" 
-                                   required
-                                   placeholder="Digite o nome completo">
+                            <input type="text"
+                                id="nome"
+                                name="nome"
+                                class="form-control"
+                                value="<?= htmlspecialchars($user_edit['nome']) ?>"
+                                required
+                                placeholder="Digite o nome completo">
                         </div>
 
                         <div class="form-group">
                             <label for="email">📧 Email *</label>
-                            <input type="email" 
-                                   id="email" 
-                                   name="email" 
-                                   class="form-control" 
-                                   value="<?= htmlspecialchars($user_edit['email']) ?>" 
-                                   required
-                                   placeholder="exemplo@email.com">
+                            <input type="email"
+                                id="email"
+                                name="email"
+                                class="form-control"
+                                value="<?= htmlspecialchars($user_edit['email']) ?>"
+                                required
+                                placeholder="exemplo@email.com">
                         </div>
 
                         <div class="form-group">
@@ -665,54 +816,73 @@ if (isset($_SESSION['erro'])) {
 
                     <div class="form-actions">
                         <a href="usuarios.php" class="btn btn-secondary">
-                            ↩️ Cancelar
+                            ↩️ Voltar para Lista
                         </a>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" name="salvar_edicao" class="btn btn-primary">
                             💾 Salvar Alterações
                         </button>
                     </div>
                 </form>
             </div>
 
+            <!-- Ações Rápidas -->
             <?php if ($user_edit['id'] != $usuario['id']): ?>
-            <div class="form-section">
-                <div class="form-header">
-                    <h2>⚠️ Ações Avançadas</h2>
-                </div>
-                
-                <div style="text-align: center; padding: 20px;">
-                    <p style="margin-bottom: 20px; color: #666;">
-                        Ações irreversíveis para gerenciamento avançado do usuário
-                    </p>
-                    
-                    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                        <a href="alternar_status.php?id=<?= $user_edit['id'] ?>" 
-                           class="btn <?= $user_edit['status'] == 'ativo' ? 'btn-danger' : 'btn-primary' ?>"
-                           onclick="return confirm('Tem certeza que deseja <?= $user_edit['status'] == 'ativo' ? 'desativar' : 'ativar' ?> este usuário?')">
-                           <?= $user_edit['status'] == 'ativo' ? '⏸️ Desativar' : '✅ Ativar' ?> Usuário
-                        </a>
-                        
+                <div class="form-section">
+                    <div class="form-header">
+                        <h2>⚡ Ações Rápidas</h2>
+                    </div>
+
+                    <div class="action-buttons">
+                        <!-- Alternar Status -->
+                        <form method="post" style="display: inline;">
+                            <button type="submit" name="alternar_status" class="btn <?= $user_edit['status'] == 'ativo' ? 'btn-warning' : 'btn-success' ?>"
+                                onclick="return confirm('<?= $user_edit['status'] == 'ativo' ? 'Desativar' : 'Ativar' ?> o usuário <?= htmlspecialchars($user_edit['nome']) ?>?')">
+                                <?= $user_edit['status'] == 'ativo' ? '⏸️ Desativar' : '✅ Ativar' ?> Usuário
+                            </button>
+                        </form>
+
+                        <!-- Promover para Admin -->
                         <?php if ($user_edit['tipo'] != 'admin'): ?>
-                        <a href="promover_usuario.php?id=<?= $user_edit['id'] ?>&tipo=admin" 
-                           class="btn btn-primary"
-                           onclick="return confirm('Promover este usuário para administrador? Ele terá acesso total ao sistema.')">
-                           👑 Promover para Admin
-                        </a>
+                            <form method="post" style="display: inline;">
+                                <button type="submit" name="promover_admin" class="btn btn-success"
+                                    onclick="return confirm('Promover <?= htmlspecialchars($user_edit['nome']) ?> para administrador?')">
+                                    👑 Promover para Admin
+                                </button>
+                            </form>
                         <?php endif; ?>
-                        
-                        <a href="excluir_usuario.php?id=<?= $user_edit['id'] ?>" 
-                           class="btn btn-danger"
-                           onclick="return confirm('ATENÇÃO: Esta ação é irreversível! Tem certeza que deseja excluir permanentemente este usuário?')">
-                           🗑️ Excluir Usuário
-                        </a>
+
+                        <!-- Redefinir Senha -->
+                        <form method="post" style="display: inline;">
+                            <button type="submit" name="redefinir_senha" class="btn btn-info"
+                                onclick="return confirm('Redefinir senha de <?= htmlspecialchars($user_edit['nome']) ?>? A nova senha será: 123456')">
+                                🔑 Redefinir Senha
+                            </button>
+                        </form>
+
+                        <!-- Excluir Usuário -->
+                        <form method="post" style="display: inline;">
+                            <button type="submit" name="excluir_usuario" class="btn btn-danger"
+                                onclick="return confirm('ATENÇÃO: Esta ação é irreversível! Tem certeza que deseja excluir permanentemente <?= htmlspecialchars($user_edit['nome']) ?>?')">
+                                🗑️ Excluir Usuário
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top: 20px;">
+                        <strong>💡 Todas as ações em um só lugar:</strong>
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li><strong>Ativar/Desativar:</strong> Controla acesso ao sistema</li>
+                            <li><strong>Promover para Admin:</strong> Dá acesso total ao painel</li>
+                            <li><strong>Redefinir Senha:</strong> Define senha temporária "123456"</li>
+                            <li><strong>Excluir Usuário:</strong> Remove permanentemente (apenas sem notícias)</li>
+                        </ul>
                     </div>
                 </div>
-            </div>
             <?php else: ?>
-            <div class="alert alert-warning">
-                ⚠️ <strong>Observação:</strong> Você está editando seu próprio perfil. 
-                Algumas ações avançadas não estão disponíveis para o próprio usuário.
-            </div>
+                <div class="alert alert-warning">
+                    ⚠️ <strong>Observação:</strong> Você está editando seu próprio perfil.
+                    Algumas ações avançadas não estão disponíveis para o próprio usuário.
+                </div>
             <?php endif; ?>
         </main>
     </div>
@@ -722,7 +892,7 @@ if (isset($_SESSION['erro'])) {
         document.getElementById('email').addEventListener('blur', function() {
             const email = this.value;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            
+
             if (email && !emailRegex.test(email)) {
                 this.style.borderColor = 'var(--danger)';
                 this.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.1)';
@@ -736,17 +906,18 @@ if (isset($_SESSION['erro'])) {
         let formChanged = false;
         const form = document.querySelector('form');
         const inputs = form.querySelectorAll('input, select');
-        
+
         inputs.forEach(input => {
+            const originalValue = input.value;
             input.addEventListener('change', () => {
-                formChanged = true;
+                formChanged = input.value !== originalValue;
             });
         });
 
         window.addEventListener('beforeunload', (e) => {
             if (formChanged) {
                 e.preventDefault();
-                e.returnValue = '';
+                e.returnValue = 'Você tem alterações não salvas. Tem certeza que deseja sair?';
             }
         });
 
@@ -755,4 +926,5 @@ if (isset($_SESSION['erro'])) {
         });
     </script>
 </body>
-</html> 
+
+</html>
