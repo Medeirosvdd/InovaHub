@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../includes/conexao.php';  // CAMINHO CORRETO!
+require_once '../includes/conexao.php';
 
 // VERIFICAÇÃO TEMPORÁRIA
 if (!isset($_SESSION['usuario_id'])) {
@@ -106,16 +106,14 @@ try {
 ?>
 
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Categorias - InovaHub Admin</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Gerenciar Categorias - InovaHub</title>
     <style>
-        <style>* {
+        * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -234,141 +232,53 @@ try {
             font-weight: bold;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .form-noticia {
+        /* Section */
+        .section {
             background: white;
-            padding: 30px;
             border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .form-group input[type="text"],
-        .form-group input[type="file"],
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-
-        .form-group input[type="text"]:focus,
-        .form-group input[type="file"]:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #c4170c;
-            box-shadow: 0 0 0 3px rgba(196, 23, 12, 0.1);
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 120px;
-        }
-
-        .checkbox-group {
+        .section-header {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
         }
 
-        .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .section-header h2 {
+            color: var(--secondary);
         }
 
         .btn {
-            padding: 15px 30px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 5px;
+            font-weight: 500;
+            transition: all 0.3s;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #c4170c 0%, #a6140b 100%);
+            background: var(--primary);
             color: white;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(196, 23, 12, 0.3);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-            margin-left: 15px;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-            transform: translateY(-2px);
+            background: var(--primary-dark);
         }
 
         .btn-sm {
-            padding: 8px 16px;
-            font-size: 14px;
-            text-transform: none;
-            letter-spacing: normal;
-        }
-
-        /* Alert Messages */
-        .alert {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid;
-        }
-
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border-left-color: #28a745;
-        }
-
-        .alert-danger {
-            background: #f8d7da;
-            color: #721c24;
-            border-left-color: #dc3545;
-        }
-
-        .alert-warning {
-            background: #fff3cd;
-            color: #856404;
-            border-left-color: #ffc107;
+            padding: 5px 10px;
+            font-size: 12px;
         }
 
         /* Table */
@@ -425,37 +335,126 @@ try {
             background: #c82333;
         }
 
+        .btn-view {
+            background: #6c757d;
+            color: white;
+        }
+
         /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
         .modal-content {
-            border: none;
+            background: white;
             border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
         .modal-header {
-            background: var(--secondary);
-            color: white;
-            border-bottom: 1px solid #dee2e6;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .modal-header .btn-close {
-            filter: invert(1);
+        .modal-header h3 {
+            color: var(--secondary);
+            margin: 0;
         }
 
-        .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 0.2rem rgba(196, 23, 12, 0.25);
-        }
-
-        .required::after {
-            content: " *";
-            color: #c4170c;
-        }
-
-        .form-help {
-            font-size: 12px;
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
             color: #666;
-            margin-top: 5px;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input[type="text"],
+        .form-group textarea,
+        .form-group input[type="color"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group input[type="color"] {
+            height: 45px;
+            padding: 5px;
+        }
+
+        /* Alert Messages */
+        .alert {
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: var(--success);
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: var(--danger);
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left-color: var(--warning);
         }
 
         /* Responsive */
@@ -470,149 +469,166 @@ try {
                 margin-left: 0;
             }
 
-            .form-row {
-                grid-template-columns: 1fr;
+            .section-header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
             }
 
-            .container {
-                padding: 10px;
+            .table {
+                display: block;
+                overflow-x: auto;
             }
         }
-    </style>
     </style>
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar p-0">
-                <div class="p-4">
-                    <h4 class="mb-4"><i class="fas fa-rocket me-2"></i>InovaHub Admin</h4>
-                    <nav class="nav flex-column">
-                        <a class="nav-link" href="../dashboard.php"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a>
-                        <a class="nav-link" href="noticias.php"><i class="fas fa-newspaper me-2"></i>Notícias</a>
-                        <a class="nav-link active" href="categorias.php"><i class="fas fa-tags me-2"></i>Categorias</a>
-                        <a class="nav-link" href="usuarios.php"><i class="fas fa-users me-2"></i>Usuários</a>
-                        <a class="nav-link" href="../logout.php"><i class="fas fa-sign-out-alt me-2"></i>Sair</a>
-                    </nav>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🚀 InovaHub</h1>
+                <p>Painel Administrativo</p>
+            </div>
+
+            <nav class="nav-links">
+                <a href="../dashboard.php">📊 Dashboard</a>
+                <a href="noticias.php">📰 Gerenciar Notícias</a>
+                <a href="usuarios.php">👥 Gerenciar Usuários</a>
+                <a href="categorias.php" class="active">📂 Gerenciar Categorias</a>
+                <a href="comentarios.php">💬 Moderar Comentários</a>
+                <a href="../index.php">🏠 Voltar ao Site</a>
+                <a href="../auth/logout.php">🚪 Sair</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="header">
+                <h1>📂 Gerenciar Categorias</h1>
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <?= strtoupper(substr($_SESSION['usuario_nome'], 0, 1)) ?>
+                    </div>
+                    <span>Olá, <?= $_SESSION['usuario_nome'] ?></span>
                 </div>
             </div>
 
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10 ms-sm-auto px-4 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2><i class="fas fa-tags text-primary me-2"></i>Gerenciar Categorias</h2>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCategoria">
-                        <i class="fas fa-plus me-2"></i>Nova Categoria
+            <?= $mensagem ?>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Lista de Categorias</h2>
+                    <button class="btn btn-primary" onclick="abrirModal()">
+                        📝 Nova Categoria
                     </button>
                 </div>
 
-                <?php echo $mensagem; ?>
-
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">Lista de Categorias</h5>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($categorias)): ?>
-                                    <div class="text-center py-4">
-                                        <i class="fas fa-tags fa-3x text-muted mb-3"></i>
-                                        <p class="text-muted">Nenhuma categoria cadastrada.</p>
-                                        <p class="text-muted small">Use o botão "Nova Categoria" para adicionar a primeira.</p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover">
-                                            <thead>
-                                                <tr>
-                                                    <th>Nome</th>
-                                                    <th>Slug</th>
-                                                    <th>Descrição</th>
-                                                    <th>Cor</th>
-                                                    <th>Data Criação</th>
-                                                    <th>Ações</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php foreach ($categorias as $categoria): ?>
-                                                    <tr>
-                                                        <td>
-                                                            <span class="category-badge" style="background-color: <?php echo $categoria['cor']; ?>">
-                                                                <?php echo htmlspecialchars($categoria['nome']); ?>
-                                                            </span>
-                                                        </td>
-                                                        <td><code><?php echo htmlspecialchars($categoria['slug']); ?></code></td>
-                                                        <td><?php echo htmlspecialchars($categoria['descricao'] ?? '-'); ?></td>
-                                                        <td><input type="color" value="<?php echo $categoria['cor']; ?>" class="form-control form-control-color" disabled style="width: 50px; height: 30px;"></td>
-                                                        <td><?php echo date('d/m/Y H:i', strtotime($categoria['criado_em'])); ?></td>
-                                                        <td>
-                                                            <button class="btn btn-sm btn-outline-primary"
-                                                                onclick="editarCategoria(<?php echo $categoria['id']; ?>, '<?php echo addslashes($categoria['nome']); ?>', '<?php echo addslashes($categoria['descricao'] ?? ''); ?>', '<?php echo $categoria['cor']; ?>')"
-                                                                data-bs-toggle="modal" data-bs-target="#modalCategoria">
-                                                                <i class="fas fa-edit"></i>
-                                                            </button>
-                                                            <a href="?excluir=<?php echo $categoria['id']; ?>"
-                                                                class="btn btn-sm btn-outline-danger"
-                                                                onclick="return confirm('Tem certeza que deseja excluir a categoria \'<?php echo addslashes($categoria['nome']); ?>\'?')">
-                                                                <i class="fas fa-trash"></i>
-                                                            </a>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
+                <?php if (empty($categorias)): ?>
+                    <div class="text-center py-4">
+                        <p>Nenhuma categoria cadastrada.</p>
+                        <p class="text-muted small">Use o botão "Nova Categoria" para adicionar a primeira.</p>
                     </div>
-                </div>
+                <?php else: ?>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Slug</th>
+                                <th>Descrição</th>
+                                <th>Cor</th>
+                                <th>Data Criação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($categorias as $categoria): ?>
+                                <tr>
+                                    <td>
+                                        <span class="category-badge" style="background-color: <?= $categoria['cor'] ?>">
+                                            <?= htmlspecialchars($categoria['nome']) ?>
+                                        </span>
+                                    </td>
+                                    <td><code><?= htmlspecialchars($categoria['slug']) ?></code></td>
+                                    <td><?= htmlspecialchars($categoria['descricao'] ?? '-') ?></td>
+                                    <td>
+                                        <input type="color" value="<?= $categoria['cor'] ?>" disabled
+                                            style="width: 30px; height: 30px; border: none; background: none; cursor: default;">
+                                    </td>
+                                    <td><?= date('d/m/Y H:i', strtotime($categoria['criado_em'])) ?></td>
+                                    <td class="action-buttons">
+                                        <button class="btn btn-edit btn-sm"
+                                            onclick="editarCategoria(<?= $categoria['id'] ?>, '<?= addslashes($categoria['nome']) ?>', '<?= addslashes($categoria['descricao'] ?? '') ?>', '<?= $categoria['cor'] ?>')">
+                                            ✏️
+                                        </button>
+                                        <a href="?excluir=<?= $categoria['id'] ?>" class="btn btn-delete btn-sm"
+                                            onclick="return confirm('Tem certeza que deseja excluir a categoria \'<?= addslashes($categoria['nome']) ?>\'?')">
+                                            🗑️
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- Modal Categoria -->
-    <div class="modal fade" id="modalCategoria" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalTitulo">Nova Categoria</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="hidden" name="id" id="categoriaId">
-                        <input type="hidden" name="acao" id="acao" value="criar">
+    <div class="modal-overlay" id="modalCategoria">
+        <div class="modal-content">
+            <form method="POST">
+                <div class="modal-header">
+                    <h3 id="modalTitulo">Nova Categoria</h3>
+                    <button type="button" class="close-btn" onclick="fecharModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="categoriaId">
+                    <input type="hidden" name="acao" id="acao" value="criar">
 
-                        <div class="mb-3">
-                            <label for="nome" class="form-label">Nome da Categoria *</label>
-                            <input type="text" class="form-control" id="nome" name="nome" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="descricao" class="form-label">Descrição</label>
-                            <textarea class="form-control" id="descricao" name="descricao" rows="3" placeholder="Descrição opcional da categoria..."></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="cor" class="form-label">Cor de Identificação</label>
-                            <input type="color" class="form-control form-control-color" id="cor" name="cor" value="#007bff" title="Escolha uma cor" style="width: 70px; height: 40px;">
-                        </div>
+                    <div class="form-group">
+                        <label for="nome">Nome da Categoria *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Salvar Categoria</button>
+
+                    <div class="form-group">
+                        <label for="descricao">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"
+                            placeholder="Descrição opcional da categoria..."></textarea>
                     </div>
-                </form>
-            </div>
+
+                    <div class="form-group">
+                        <label for="cor">Cor de Identificação</label>
+                        <input type="color" class="form-control" id="cor" name="cor" value="#007bff"
+                            title="Escolha uma cor" style="width: 70px; height: 40px;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Categoria</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function abrirModal() {
+            document.getElementById('modalCategoria').classList.add('active');
+        }
+
+        function fecharModal() {
+            document.getElementById('modalCategoria').classList.remove('active');
+            // Reset form
+            document.getElementById('categoriaId').value = '';
+            document.getElementById('nome').value = '';
+            document.getElementById('descricao').value = '';
+            document.getElementById('cor').value = '#007bff';
+            document.getElementById('acao').value = 'criar';
+            document.getElementById('modalTitulo').textContent = 'Nova Categoria';
+        }
+
         function editarCategoria(id, nome, descricao, cor) {
             document.getElementById('categoriaId').value = id;
             document.getElementById('nome').value = nome;
@@ -620,15 +636,14 @@ try {
             document.getElementById('cor').value = cor;
             document.getElementById('acao').value = 'editar';
             document.getElementById('modalTitulo').textContent = 'Editar Categoria';
+            abrirModal();
         }
 
-        document.getElementById('modalCategoria').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('categoriaId').value = '';
-            document.getElementById('nome').value = '';
-            document.getElementById('descricao').value = '';
-            document.getElementById('cor').value = '#007bff';
-            document.getElementById('acao').value = 'criar';
-            document.getElementById('modalTitulo').textContent = 'Nova Categoria';
+        // Fechar modal ao clicar fora
+        document.getElementById('modalCategoria').addEventListener('click', function(e) {
+            if (e.target === this) {
+                fecharModal();
+            }
         });
     </script>
 </body>
