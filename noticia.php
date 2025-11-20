@@ -3,19 +3,60 @@ session_start();
 require 'includes/conexao.php';
 require 'includes/funcoes.php';
 
-// FUNÇÃO PARA BUSCAR IMAGENS
-function getImagemNoticia($nome_imagem)
+// FUNÇÃO PARA BUSCAR IMAGENS (AGORA SUPORTA URLS)
+function getImagemNoticia($imagem)
 {
-    if (empty($nome_imagem) || $nome_imagem === 'noticia.jpg') {
+    // Se estiver vazio, retorna imagem padrão
+    if (empty($imagem) || $imagem === 'noticia.jpg') {
         return "assets/img/defaults/noticia.jpg";
     }
 
-    $caminho_imagem = "uploads/noticias/" . $nome_imagem;
+    // ✅ Verifica se é uma URL (começa com http:// ou https://)
+    if (strpos($imagem, 'http://') === 0 || strpos($imagem, 'https://') === 0) {
+        return $imagem; // Retorna a URL diretamente
+    }
+
+    // Se não for URL, verifica se é um arquivo local
+    $caminho_imagem = "uploads/noticias/" . $imagem;
 
     if (file_exists($caminho_imagem)) {
         return $caminho_imagem;
     } else {
         return "assets/img/defaults/noticia.jpg";
+    }
+}
+
+// FUNÇÃO PARA BUSCAR AVATAR (SUPORTA URLS)
+function getAvatarUsuario($avatar, $nome_usuario = '')
+{
+    // Se estiver vazio, retorna avatar padrão ou iniciais
+    if (empty($avatar) || $avatar === 'avatar.jpg') {
+        if (!empty($nome_usuario)) {
+            // Retorna avatar com iniciais
+            return 'data:image/svg+xml;base64,' . base64_encode('
+                <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" fill="#c4170c"/>
+                    <text x="20" y="25" font-family="Arial" font-size="16" fill="white" text-anchor="middle" dominant-baseline="middle">'
+                . strtoupper(substr($nome_usuario, 0, 1)) .
+                '</text>
+                </svg>
+            ');
+        }
+        return "assets/img/defaults/avatar.jpg";
+    }
+
+    // ✅ Verifica se é uma URL
+    if (strpos($avatar, 'http://') === 0 || strpos($avatar, 'https://') === 0) {
+        return $avatar;
+    }
+
+    // Se não for URL, verifica se é um arquivo local
+    $caminho_avatar = "uploads/avatars/" . $avatar;
+
+    if (file_exists($caminho_avatar)) {
+        return $caminho_avatar;
+    } else {
+        return "assets/img/defaults/avatar.jpg";
     }
 }
 
@@ -351,7 +392,10 @@ $usuario = usuarioLogado($pdo);
 
                 <div class="noticia-meta">
                     <div class="autor-info">
-                        <img src="uploads/avatars/<?= $noticia['autor_avatar'] ?>" alt="<?= $noticia['autor_nome'] ?>" class="autor-avatar" onerror="this.src='assets/img/defaults/avatar.jpg'">
+                        <!-- ✅ AGORA SUPORTA URLS DE AVATAR -->
+                        <img src="<?= getAvatarUsuario($noticia['autor_avatar'], $noticia['autor_nome']) ?>"
+                            alt="<?= $noticia['autor_nome'] ?>"
+                            class="autor-avatar">
                         <span>Por <?= $noticia['autor_nome'] ?></span>
                     </div>
                     <span class="data"><?= formatarData($noticia['data']) ?></span>
@@ -363,8 +407,11 @@ $usuario = usuarioLogado($pdo);
         <div class="container">
             <div class="layout-principal">
                 <div class="conteudo-principal">
-                    <!-- IMAGEM DA NOTÍCIA -->
-                    <img src="<?= getImagemNoticia($noticia['imagem']) ?>" alt="<?= htmlspecialchars($noticia['titulo']) ?>" class="noticia-imagem-destaque">
+                    <!-- ✅ IMAGEM DA NOTÍCIA AGORA SUPORTA URLS -->
+                    <img src="<?= getImagemNoticia($noticia['imagem']) ?>"
+                        alt="<?= htmlspecialchars($noticia['titulo']) ?>"
+                        class="noticia-imagem-destaque"
+                        onerror="this.src='assets/img/defaults/noticia.jpg'">
 
                     <div class="noticia-conteudo">
                         <?= nl2br(htmlspecialchars($noticia['noticia'])) ?>
@@ -426,7 +473,10 @@ $usuario = usuarioLogado($pdo);
                             <?php foreach ($comentarios as $comentario): ?>
                                 <div class="comentario-item">
                                     <div class="comentario-header">
-                                        <img src="uploads/avatars/<?= $comentario['usuario_avatar'] ?>" alt="<?= $comentario['usuario_nome'] ?>" class="comentario-avatar" onerror="this.src='assets/img/defaults/avatar.jpg'">
+                                        <!-- ✅ AVATAR DE COMENTÁRIOS TAMBÉM SUPORTA URLS -->
+                                        <img src="<?= getAvatarUsuario($comentario['usuario_avatar'], $comentario['usuario_nome']) ?>"
+                                            alt="<?= $comentario['usuario_nome'] ?>"
+                                            class="comentario-avatar">
                                         <strong><?= $comentario['usuario_nome'] ?></strong>
                                         <span class="comentario-data"><?= formatarData($comentario['criado_em']) ?></span>
                                     </div>

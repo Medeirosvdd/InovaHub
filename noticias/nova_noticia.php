@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $categoria = intval($_POST['categoria']);
     $status = $_POST['status'];
     $destaque = isset($_POST['destaque']) ? 1 : 0;
-    $imagem_arquivo = $_FILES['imagem'] ?? null;
+    $imagem_url = trim($_POST['imagem_url'] ?? '');
 
     // Validações
     if (empty($titulo) || empty($texto) || empty($resumo)) {
@@ -33,43 +33,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erro = "O resumo deve ter no máximo 150 caracteres.";
     } else {
         try {
-            // Processar upload da imagem
-            $imagem_blob = null;
-            $tipo_imagem = null;
+            // ✅ Processar URL da imagem (OBRIGATÓRIO)
+            if (empty($imagem_url)) {
+                throw new Exception('A URL da imagem é obrigatória.');
+            }
 
-            // Se enviou arquivo
-            if ($imagem_arquivo && $imagem_arquivo['error'] === UPLOAD_ERR_OK) {
-                $tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-                $tamanhoMaximo = 5 * 1024 * 1024; // 5MB
+            // Validar URL
+            if (!filter_var($imagem_url, FILTER_VALIDATE_URL)) {
+                throw new Exception('URL da imagem inválida.');
+            }
 
-                if (!in_array($imagem_arquivo['type'], $tiposPermitidos)) {
-                    throw new Exception('Tipo de arquivo não permitido. Use JPG, PNG, GIF ou WebP.');
-                }
-
-                if ($imagem_arquivo['size'] > $tamanhoMaximo) {
-                    throw new Exception('Arquivo muito grande. Máximo 5MB.');
-                }
-
-                // ✅ LER O ARQUIVO E CONVERTER PARA BLOB
-                $imagem_blob = file_get_contents($imagem_arquivo['tmp_name']);
-                $tipo_imagem = $imagem_arquivo['type'];
-
-                if ($imagem_blob === false) {
-                    throw new Exception('Erro ao ler o arquivo da imagem.');
+            // Verificar se é uma imagem (opcional - pode remover se quiser mais rápido)
+            $headers = @get_headers($imagem_url, 1);
+            if ($headers !== false) {
+                $content_type = $headers['Content-Type'] ?? '';
+                if (!str_contains($content_type, 'image/')) {
+                    throw new Exception('A URL fornecida não é uma imagem válida.');
                 }
             }
 
             // Gerar slug automático
             $slug = gerarSlug($titulo);
 
-            // Definir data de publicação se for publicada
-            $publicada_em = $status === 'publicada' ? date('Y-m-d H:i:s') : null;
-
-            // ✅ INSERIR NO BANCO COM A IMAGEM COMO BLOB
+            // ✅ INSERIR NO BANCO COM A URL DA IMAGEM - ESTRUTURA DO SEU BANCO
             $stmt = $pdo->prepare("
                 INSERT INTO noticias 
-                (titulo, slug, resumo, noticia, autor, imagem, tipo_imagem, categoria, status, destaque, publicada_em) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (titulo, slug, resumo, noticia, imagem, autor, categoria, status, destaque) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             $stmt->execute([
@@ -77,20 +67,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $slug,
                 $resumo,
                 $texto,
+                $imagem_url,  // ✅ URL da imagem direto no campo 'imagem'
                 $usuario['id'],
-                $imagem_blob,  // ✅ IMAGEM COMO BLOB
-                $tipo_imagem,  // ✅ TIPO DA IMAGEM
                 $categoria,
                 $status,
-                $destaque,
-                $publicada_em
+                $destaque
             ]);
 
             $sucesso = "Notícia publicada com sucesso!";
 
             // Limpar formulário em caso de sucesso
             $_POST = [];
-            $_FILES = [];
         } catch (Exception $e) {
             $erro = "Erro: " . $e->getMessage();
         }
@@ -131,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .form-group input[type="text"],
-        .form-group input[type="file"],
+        .form-group input[type="url"],
         .form-group textarea,
         .form-group select {
             width: 100%;
@@ -143,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .form-group input[type="text"]:focus,
-        .form-group input[type="file"]:focus,
+        .form-group input[type="url"]:focus,
         .form-group textarea:focus,
         .form-group select:focus {
             outline: none;
@@ -252,21 +239,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 2px solid #e0e0e0;
         }
 
-        .upload-area {
-            border: 2px dashed #ddd;
+        .url-area {
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-            transition: all 0.3s;
+            padding: 20px;
             background: #f8f9fa;
         }
 
-        .upload-area:hover {
-            border-color: #c4170c;
-            background: #fff5f5;
-        }
-
-        .upload-area.dragover {
+        .url-area:focus-within {
             border-color: #c4170c;
             background: #fff5f5;
         }
@@ -298,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="sucesso"><?= $sucesso ?></div>
             <?php endif; ?>
 
-            <form method="post" enctype="multipart/form-data">
+            <form method="post">
                 <!-- Título -->
                 <div class="form-group">
                     <label for="titulo" class="required">Título da Notícia</label>
@@ -315,27 +295,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="form-help">Este texto aparecerá como preview nas listagens. <span id="contador-resumo">0/150</span> caracteres</div>
                 </div>
 
-                <!-- Imagem -->
+                <!-- URL da Imagem -->
                 <div class="form-group">
-                    <label for="imagem">Imagem de Capa</label>
-                    <div class="upload-area" id="upload-area">
-                        <div style="margin-bottom: 15px;">
-                            <span style="font-size: 48px;">📁</span>
-                        </div>
-                        <p style="margin-bottom: 15px; font-weight: 500;">Clique para selecionar ou arraste uma imagem</p>
-                        <input type="file" id="imagem" name="imagem"
-                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                            style="display: none;">
-                        <button type="button" onclick="document.getElementById('imagem').click()"
-                            style="background: #c4170c; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
-                            Selecionar Imagem
-                        </button>
-                        <div class="form-help" style="margin-top: 15px;">
-                            Formatos: JPG, PNG, GIF, WebP. Máximo: 5MB
-                        </div>
+                    <label for="imagem_url" class="required">URL da Imagem de Capa</label>
+                    <div class="url-area">
+                        <input type="url" id="imagem_url" name="imagem_url" required
+                            value="<?= htmlspecialchars($_POST['imagem_url'] ?? '') ?>"
+                            placeholder="https://exemplo.com/imagem.jpg"
+                            style="border: none; background: transparent; padding: 0; width: 100%;">
+                    </div>
+                    <div class="form-help">
+                        Cole a URL completa de uma imagem (ex: https://exemplo.com/foto.jpg)<br>
+                        Formatos suportados: JPG, PNG, GIF, WebP
                     </div>
                     <img id="preview" class="preview-imagem" alt="Preview da imagem">
-                    <div id="info-arquivo" class="form-help" style="display: none;"></div>
+                    <div id="info-url" class="form-help" style="display: none;"></div>
                 </div>
 
                 <!-- Configurações -->
@@ -395,86 +369,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
         // Elementos DOM
-        const uploadArea = document.getElementById('upload-area');
-        const fileInput = document.getElementById('imagem');
+        const urlInput = document.getElementById('imagem_url');
         const preview = document.getElementById('preview');
-        const infoArquivo = document.getElementById('info-arquivo');
+        const infoUrl = document.getElementById('info-url');
 
-        // Clique na área de upload
-        uploadArea.addEventListener('click', function() {
-            fileInput.click();
-        });
+        // Preview automático da URL
+        urlInput.addEventListener('input', function() {
+            const url = this.value.trim();
 
-        // Drag and drop
-        uploadArea.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', function() {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', function(e) {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                processarArquivo(e.dataTransfer.files[0]);
-            }
-        });
-
-        // Mudança no input de arquivo
-        fileInput.addEventListener('change', function(e) {
-            if (this.files.length) {
-                processarArquivo(this.files[0]);
-            }
-        });
-
-        // Processar arquivo selecionado
-        function processarArquivo(file) {
-            // Validar tipo
-            const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-            if (!tiposPermitidos.includes(file.type)) {
-                alert('Tipo de arquivo não permitido. Use JPG, PNG, GIF ou WebP.');
-                return;
-            }
-
-            // Validar tamanho (5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Arquivo muito grande. Máximo 5MB.');
-                return;
-            }
-
-            // Mostrar preview
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                preview.src = e.target.result;
+            if (url) {
+                // Mostrar preview
+                preview.src = url;
                 preview.style.display = 'block';
+                preview.onerror = function() {
+                    infoUrl.innerHTML = '<span style="color: #dc3545;">❌ Não foi possível carregar a imagem desta URL</span>';
+                    infoUrl.style.display = 'block';
+                    preview.style.display = 'none';
+                };
+                preview.onload = function() {
+                    infoUrl.innerHTML = '<span style="color: #28a745;">✅ Imagem carregada com sucesso!</span>';
+                    infoUrl.style.display = 'block';
+                };
+            } else {
+                preview.style.display = 'none';
+                infoUrl.style.display = 'none';
+            }
+        });
 
-                // Atualizar informações do arquivo
-                const tamanhoMB = (file.size / (1024 * 1024)).toFixed(2);
-                infoArquivo.innerHTML = `
-                    <strong>Arquivo:</strong> ${file.name}<br>
-                    <strong>Tamanho:</strong> ${tamanhoMB} MB<br>
-                    <strong>Tipo:</strong> ${file.type}
-                `;
-                infoArquivo.style.display = 'block';
+        // Validar URL ao perder o foco
+        urlInput.addEventListener('blur', function() {
+            const url = this.value.trim();
+            if (url && !isValidUrl(url)) {
+                infoUrl.innerHTML = '<span style="color: #dc3545;">❌ URL inválida</span>';
+                infoUrl.style.display = 'block';
+            }
+        });
 
-                // Atualizar texto da área de upload
-                uploadArea.innerHTML = `
-                    <div style="margin-bottom: 10px;">
-                        <span style="font-size: 36px;">✅</span>
-                    </div>
-                    <p style="margin-bottom: 10px; font-weight: 500; color: #28a745;">Imagem selecionada!</p>
-                    <button type="button" onclick="document.getElementById('imagem').click()" 
-                            style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                        Trocar Imagem
-                    </button>
-                `;
-            };
-            reader.readAsDataURL(file);
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
         }
 
         // Contador de caracteres para o resumo
